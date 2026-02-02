@@ -5,11 +5,16 @@ A local-first CLI knowledge base storing markdown notes with YAML frontmatter.
 ## Project Structure
 
 - `cmd/agentnotes/main.go` - CLI entrypoint
+- `cmd/agentnotes-gui/main.go` - GUI entrypoint (Fyne)
 - `internal/notes/model.go` - Note struct, frontmatter parsing/marshaling
 - `internal/notes/store.go` - File-based CRUD operations
 - `internal/notes/search.go` - Search and filter logic
 - `internal/cli/commands.go` - Cobra CLI command implementations
 - `internal/cli/display.go` - Terminal formatting with ANSI colors
+- `internal/gui/app.go` - Fyne app setup and main window
+- `internal/gui/notelist.go` - Left sidebar with scrollable note list
+- `internal/gui/noteview.go` - Right panel for note content and metadata
+- `internal/gui/commentview.go` - Comment display components
 
 ## Storage
 
@@ -24,10 +29,19 @@ The CLI operates relative to the current working directory - each project can ha
 
 ## Build & Run
 
+### CLI
 ```bash
 go build -o agentnotes ./cmd/agentnotes
 ./agentnotes --help
 ```
+
+### GUI
+```bash
+go build -o agentnotes-gui ./cmd/agentnotes-gui
+./agentnotes-gui
+```
+
+The GUI provides a read-only view of notes with a split layout: note list on the left, note content/metadata/comments on the right.
 
 ## Testing Notes
 
