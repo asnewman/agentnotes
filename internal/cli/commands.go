@@ -46,6 +46,7 @@ Simple, portable, human and AI-agent readable.`,
 		app.deleteCmd(),
 		app.tagsCmd(),
 		app.catCmd(),
+		app.commentCmd(),
 	)
 
 	return rootCmd
@@ -154,7 +155,9 @@ func (app *App) listCmd() *cobra.Command {
 
 // showCmd creates the show command
 func (app *App) showCmd() *cobra.Command {
-	return &cobra.Command{
+	var showComments bool
+
+	cmd := &cobra.Command{
 		Use:   "show <id-or-title>",
 		Short: "Display a note's content",
 		Args:  cobra.ExactArgs(1),
@@ -164,10 +167,18 @@ func (app *App) showCmd() *cobra.Command {
 				return err
 			}
 
-			fmt.Print(FormatNoteDetail(note))
+			if showComments && len(note.Comments) > 0 {
+				fmt.Print(FormatNoteDetailWithComments(note))
+			} else {
+				fmt.Print(FormatNoteDetail(note))
+			}
 			return nil
 		},
 	}
+
+	cmd.Flags().BoolVar(&showComments, "comments", false, "Show comments inline with content")
+
+	return cmd
 }
 
 // searchCmd creates the search command
@@ -508,6 +519,181 @@ func (app *App) catCmd() *cobra.Command {
 			return nil
 		},
 	}
+}
+
+// commentCmd creates the comment parent command
+func (app *App) commentCmd() *cobra.Command {
+	cmd := &cobra.Command{
+		Use:   "comment",
+		Short: "Manage comments on notes",
+		Long:  "Add, list, and delete comments on notes.",
+	}
+
+	cmd.AddCommand(
+		app.commentAddCmd(),
+		app.commentListCmd(),
+		app.commentDeleteCmd(),
+	)
+
+	return cmd
+}
+
+// commentAddCmd creates the comment add subcommand
+func (app *App) commentAddCmd() *cobra.Command {
+	var author string
+	var line int
+
+	cmd := &cobra.Command{
+		Use:   "add <note> [comment]",
+		Short: "Add a comment to a note",
+		Long: `Add a comment to a note. The comment can be provided as an argument or via stdin.
+
+Examples:
+  agentnotes comment add "My Note" "This is a comment"
+  agentnotes comment add "My Note" --author=claude "AI comment"
+  agentnotes comment add "My Note" "Comment on line 5" --line=5
+  echo "comment" | agentnotes comment add "My Note"`,
+		Args: cobra.RangeArgs(1, 2),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			noteID := args[0]
+
+			var content string
+
+			// Check if comment is provided as argument
+			if len(args) > 1 {
+				content = args[1]
+			} else {
+				// Check if stdin has data
+				stat, _ := os.Stdin.Stat()
+				if (stat.Mode() & os.ModeCharDevice) == 0 {
+					// Reading from pipe/stdin
+					scanner := bufio.NewScanner(os.Stdin)
+					var sb strings.Builder
+					for scanner.Scan() {
+						if sb.Len() > 0 {
+							sb.WriteString("\n")
+						}
+						sb.WriteString(scanner.Text())
+					}
+					content = sb.String()
+				} else {
+					return fmt.Errorf("comment text is required (provide as argument or via stdin)")
+				}
+			}
+
+			if strings.TrimSpace(content) == "" {
+				return fmt.Errorf("comment cannot be empty")
+			}
+
+			note, comment, err := app.Store.AddComment(noteID, content, author, line)
+			if err != nil {
+				return err
+			}
+
+			if line > 0 {
+				fmt.Println(Success(fmt.Sprintf("Added comment [%s] to '%s' at line %d", comment.ID[:8], note.Title, line)))
+			} else {
+				fmt.Println(Success(fmt.Sprintf("Added comment [%s] to '%s'", comment.ID[:8], note.Title)))
+			}
+			return nil
+		},
+	}
+
+	cmd.Flags().StringVar(&author, "author", "", "Comment author (e.g., 'user', 'claude')")
+	cmd.Flags().IntVar(&line, "line", 0, "Line number this comment refers to")
+
+	return cmd
+}
+
+// commentListCmd creates the comment list subcommand
+func (app *App) commentListCmd() *cobra.Command {
+	var limit int
+
+	cmd := &cobra.Command{
+		Use:   "list <note>",
+		Short: "List comments on a note",
+		Args:  cobra.ExactArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			note, err := app.Store.Get(args[0])
+			if err != nil {
+				return err
+			}
+
+			comments := note.Comments
+			if limit > 0 && len(comments) > limit {
+				comments = comments[:limit]
+			}
+
+			fmt.Printf(Dim+"Comments on '%s':\n\n"+Reset, note.Title)
+			fmt.Print(FormatCommentList(comments))
+			return nil
+		},
+	}
+
+	cmd.Flags().IntVar(&limit, "limit", 0, "Maximum number of comments to show (0 = all)")
+
+	return cmd
+}
+
+// commentDeleteCmd creates the comment delete subcommand
+func (app *App) commentDeleteCmd() *cobra.Command {
+	var force bool
+
+	cmd := &cobra.Command{
+		Use:   "delete <note> <comment-id>",
+		Short: "Delete a comment from a note",
+		Args:  cobra.ExactArgs(2),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			noteID := args[0]
+			commentID := args[1]
+
+			// Get the note to find the comment
+			note, err := app.Store.Get(noteID)
+			if err != nil {
+				return err
+			}
+
+			// Find the comment
+			var targetComment *notes.Comment
+			for _, c := range note.Comments {
+				if strings.HasPrefix(c.ID, commentID) {
+					targetComment = &c
+					break
+				}
+			}
+
+			if targetComment == nil {
+				return fmt.Errorf("comment not found: %s", commentID)
+			}
+
+			if !force {
+				preview := targetComment.Content
+				if len(preview) > 50 {
+					preview = preview[:50] + "..."
+				}
+				fmt.Printf("Delete comment '%s' from '%s'? [y/N] ", preview, note.Title)
+				reader := bufio.NewReader(os.Stdin)
+				response, _ := reader.ReadString('\n')
+				response = strings.TrimSpace(strings.ToLower(response))
+
+				if response != "y" && response != "yes" {
+					fmt.Println("Cancelled.")
+					return nil
+				}
+			}
+
+			if err := app.Store.DeleteComment(note.ID, targetComment.ID); err != nil {
+				return err
+			}
+
+			fmt.Println(Success(fmt.Sprintf("Deleted comment [%s] from '%s'", targetComment.ID[:8], note.Title)))
+			return nil
+		},
+	}
+
+	cmd.Flags().BoolVarP(&force, "force", "f", false, "Skip confirmation prompt")
+
+	return cmd
 }
 
 // openEditor opens the user's preferred editor with the given content

@@ -18,7 +18,7 @@ Notes stored in `.agentnotes/notes/` (relative to current working directory) as 
 2024-01-15-slugified-title.md
 ```
 
-Each note has YAML frontmatter with: id (ULID), title, tags, created, updated, source, priority.
+Each note has YAML frontmatter with: id (ULID), title, tags, created, updated, source, priority, comments.
 
 The CLI operates relative to the current working directory - each project can have its own independent notes.
 
@@ -58,4 +58,33 @@ The `edit` command modifies notes directly from the command line (no editor requ
 ./agentnotes edit myNote --replace-line "5:Replaced"   # replace line 5
 ./agentnotes edit myNote --delete-line 4               # delete line 4
 echo "New content" | ./agentnotes edit myNote          # via stdin
+```
+
+## Comment Command
+
+The `comment` command manages comments on notes. Comments are stored in the note's YAML frontmatter.
+
+### Add comments
+```bash
+./agentnotes comment add "My Note" "This is a comment"
+./agentnotes comment add "My Note" --author=claude "AI comment"
+./agentnotes comment add "My Note" "Comment on line 5" --line=5
+echo "comment" | ./agentnotes comment add "My Note"
+```
+
+### List comments
+```bash
+./agentnotes comment list "My Note"
+./agentnotes comment list "My Note" --limit=5
+```
+
+### Delete comments
+```bash
+./agentnotes comment delete "My Note" <comment-id>
+./agentnotes comment delete "My Note" <comment-id> --force
+```
+
+### Show note with comments
+```bash
+./agentnotes show "My Note" --comments
 ```

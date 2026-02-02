@@ -92,11 +92,56 @@ func FormatNoteDetail(note *notes.Note) string {
 		sb.WriteString("\n")
 	}
 
+	if len(note.Comments) > 0 {
+		sb.WriteString(Dim + "Comments: " + Reset + fmt.Sprintf("%d", len(note.Comments)) + "\n")
+	}
+
 	sb.WriteString(Bold + "─────────────────────────────────────────────\n" + Reset)
 
 	// Content
 	sb.WriteString("\n")
 	sb.WriteString(note.Content)
+	sb.WriteString("\n")
+
+	return sb.String()
+}
+
+// FormatNoteDetailWithComments formats a note with inline comments
+func FormatNoteDetailWithComments(note *notes.Note) string {
+	var sb strings.Builder
+
+	// Header
+	sb.WriteString(Bold + "─────────────────────────────────────────────\n" + Reset)
+	sb.WriteString(BoldCyan + note.Title + Reset + "\n")
+	sb.WriteString(Bold + "─────────────────────────────────────────────\n" + Reset)
+
+	// Metadata
+	sb.WriteString(Dim + "ID:       " + Reset + note.ID + "\n")
+	sb.WriteString(Dim + "Created:  " + Reset + note.Created.Format("2006-01-02 15:04:05 MST") + "\n")
+	sb.WriteString(Dim + "Updated:  " + Reset + note.Updated.Format("2006-01-02 15:04:05 MST") + "\n")
+
+	if note.Priority > 0 {
+		sb.WriteString(Dim + "Priority: " + Reset + fmt.Sprintf("%d", note.Priority) + "\n")
+	}
+
+	if len(note.Tags) > 0 {
+		sb.WriteString(Dim + "Tags:     " + Reset)
+		for i, tag := range note.Tags {
+			if i > 0 {
+				sb.WriteString(", ")
+			}
+			sb.WriteString(Green + tag + Reset)
+		}
+		sb.WriteString("\n")
+	}
+
+	sb.WriteString(Dim + "Comments: " + Reset + fmt.Sprintf("%d", len(note.Comments)) + "\n")
+
+	sb.WriteString(Bold + "─────────────────────────────────────────────\n" + Reset)
+
+	// Content with inline comments
+	sb.WriteString("\n")
+	sb.WriteString(FormatCommentsInline(note.Content, note.Comments))
 	sb.WriteString("\n")
 
 	return sb.String()
@@ -134,4 +179,97 @@ func Error(msg string) string {
 // Info prints an info message
 func Info(msg string) string {
 	return Cyan + "ℹ " + Reset + msg
+}
+
+// FormatCommentList formats a list of comments for terminal display
+func FormatCommentList(comments []notes.Comment) string {
+	if len(comments) == 0 {
+		return Dim + "No comments." + Reset
+	}
+
+	var sb strings.Builder
+
+	for i, c := range comments {
+		if i > 0 {
+			sb.WriteString("\n")
+		}
+
+		// Comment ID and author
+		sb.WriteString(BoldYellow + "[" + c.ID[:8] + "...]" + Reset)
+		if c.Author != "" {
+			sb.WriteString(Dim + " by " + Reset + Magenta + c.Author + Reset)
+		}
+		if c.Line > 0 {
+			sb.WriteString(Dim + fmt.Sprintf(" (line %d)", c.Line) + Reset)
+		}
+		sb.WriteString("\n")
+
+		// Date
+		sb.WriteString(Dim + "  " + c.Created.Format("2006-01-02 15:04") + Reset)
+		sb.WriteString("\n")
+
+		// Content
+		sb.WriteString("  " + c.Content + "\n")
+	}
+
+	return sb.String()
+}
+
+// FormatCommentsInline formats comments inline with note content for show --comments
+func FormatCommentsInline(content string, comments []notes.Comment) string {
+	if len(comments) == 0 {
+		return content
+	}
+
+	// Build a map of line numbers to comments
+	lineComments := make(map[int][]notes.Comment)
+	var generalComments []notes.Comment
+
+	for _, c := range comments {
+		if c.Line > 0 {
+			lineComments[c.Line] = append(lineComments[c.Line], c)
+		} else {
+			generalComments = append(generalComments, c)
+		}
+	}
+
+	lines := strings.Split(content, "\n")
+	var sb strings.Builder
+
+	// Add each line with any inline comments
+	for i, line := range lines {
+		lineNum := i + 1
+		sb.WriteString(line)
+		sb.WriteString("\n")
+
+		// Check for comments on this line
+		if commentsOnLine, ok := lineComments[lineNum]; ok {
+			for _, c := range commentsOnLine {
+				sb.WriteString(Yellow + "  ┃ " + Reset)
+				if c.Author != "" {
+					sb.WriteString(Magenta + c.Author + Reset + ": ")
+				}
+				sb.WriteString(Dim + c.Content + Reset)
+				sb.WriteString(Dim + " [" + c.ID[:8] + "]" + Reset)
+				sb.WriteString("\n")
+			}
+		}
+	}
+
+	// Add general comments at the end
+	if len(generalComments) > 0 {
+		sb.WriteString("\n" + Bold + "─────────────────────────────────────────────\n" + Reset)
+		sb.WriteString(Bold + "Comments:\n" + Reset)
+		for _, c := range generalComments {
+			sb.WriteString(Yellow + "• " + Reset)
+			if c.Author != "" {
+				sb.WriteString(Magenta + c.Author + Reset + ": ")
+			}
+			sb.WriteString(c.Content)
+			sb.WriteString(Dim + " [" + c.ID[:8] + "]" + Reset)
+			sb.WriteString("\n")
+		}
+	}
+
+	return strings.TrimRight(sb.String(), "\n")
 }

@@ -5,6 +5,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"time"
 )
 
 // Store handles file-based note storage
@@ -152,6 +153,51 @@ func (s *Store) GetPath(idOrTitle string) (string, error) {
 		return "", err
 	}
 	return s.findNotePath(note.ID)
+}
+
+// AddComment adds a comment to a note and returns the updated note and new comment
+func (s *Store) AddComment(noteID, content, author string, line int) (*Note, *Comment, error) {
+	note, err := s.Get(noteID)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	comment := NewComment(author, content, line)
+	note.Comments = append(note.Comments, *comment)
+	note.Updated = comment.Created
+
+	if err := s.Update(note); err != nil {
+		return nil, nil, err
+	}
+
+	return note, comment, nil
+}
+
+// DeleteComment removes a comment from a note by comment ID
+func (s *Store) DeleteComment(noteID, commentID string) error {
+	note, err := s.Get(noteID)
+	if err != nil {
+		return err
+	}
+
+	found := false
+	newComments := make([]Comment, 0, len(note.Comments))
+	for _, c := range note.Comments {
+		if c.ID == commentID {
+			found = true
+			continue
+		}
+		newComments = append(newComments, c)
+	}
+
+	if !found {
+		return fmt.Errorf("comment not found: %s", commentID)
+	}
+
+	note.Comments = newComments
+	note.Updated = time.Now().UTC()
+
+	return s.Update(note)
 }
 
 // writeNote writes a note to the specified path
