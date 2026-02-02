@@ -16,7 +16,7 @@ A local-first CLI knowledge base storing markdown notes with YAML frontmatter.
 - `internal/gui/noteview.go` - Main panel with content and inline comments split
 - `internal/gui/commentview.go` - General comment display (non-inline comments)
 - `internal/gui/inlinecomments.go` - Right panel for inline comments (with line numbers)
-- `internal/gui/linecontent.go` - Content display with line highlighting for commented lines
+- `internal/gui/linecontent.go` - Line content utilities (legacy, unused)
 
 ## Storage
 
@@ -45,7 +45,7 @@ go build -o agentnotes-gui ./cmd/agentnotes-gui
 
 The GUI provides a read-only view of notes with a three-panel layout:
 - Left: Note list
-- Center: Note content with metadata (lines with comments are subtly highlighted)
+- Center: Note content with metadata (rendered as styled markdown)
 - Right: Inline comments panel showing comments with line references
 
 General comments (without line numbers) appear below the note content.

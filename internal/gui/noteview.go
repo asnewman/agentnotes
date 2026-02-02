@@ -140,15 +140,13 @@ func (nv *NoteView) SetNote(note *notes.Note) {
 		nv.priorityLabel.SetText("")
 	}
 
-	// Update inline comments panel first (to get commented lines)
+	// Update inline comments panel
 	nv.inlineCommentPanel.SetComments(note.Comments)
 
-	// Get lines that have comments for highlighting
-	commentedLines := nv.inlineCommentPanel.GetCommentedLines()
-
-	// Build line-numbered content with highlights
-	lineContent := BuildLineNumberedContent(note.Content, commentedLines)
-	nv.contentContainer.Objects = []fyne.CanvasObject{lineContent}
+	// Render content as styled markdown
+	richText := widget.NewRichTextFromMarkdown(note.Content)
+	richText.Wrapping = fyne.TextWrapWord
+	nv.contentContainer.Objects = []fyne.CanvasObject{richText}
 	nv.contentContainer.Refresh()
 
 	// Filter for general comments (non-inline) for bottom section
