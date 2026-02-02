@@ -13,14 +13,14 @@ type Store struct {
 	notesPath string
 }
 
-// NewStore creates a new Store with the default base path (~/.agentnotes)
+// NewStore creates a new Store with the default base path (.agentnotes in current directory)
 func NewStore() (*Store, error) {
-	home, err := os.UserHomeDir()
+	cwd, err := os.Getwd()
 	if err != nil {
-		return nil, fmt.Errorf("failed to get home directory: %w", err)
+		return nil, fmt.Errorf("failed to get current directory: %w", err)
 	}
 
-	basePath := filepath.Join(home, ".agentnotes")
+	basePath := filepath.Join(cwd, ".agentnotes")
 	return NewStoreWithPath(basePath)
 }
 

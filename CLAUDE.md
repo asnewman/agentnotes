@@ -13,12 +13,14 @@ A local-first CLI knowledge base storing markdown notes with YAML frontmatter.
 
 ## Storage
 
-Notes stored in `~/.agentnotes/notes/` as markdown files with format:
+Notes stored in `.agentnotes/notes/` (relative to current working directory) as markdown files with format:
 ```
 2024-01-15-slugified-title.md
 ```
 
 Each note has YAML frontmatter with: id (ULID), title, tags, created, updated, source, priority.
+
+The CLI operates relative to the current working directory - each project can have its own independent notes.
 
 ## Build & Run
 
