@@ -221,46 +221,187 @@ func (app *App) searchCmd() *cobra.Command {
 
 // editCmd creates the edit command
 func (app *App) editCmd() *cobra.Command {
-	return &cobra.Command{
-		Use:   "edit <id-or-title>",
-		Short: "Edit a note in $EDITOR",
-		Args:  cobra.ExactArgs(1),
+	var (
+		title       string
+		tags        string
+		addTags     string
+		removeTags  string
+		content     string
+		appendText  string
+		prependText string
+		insertLine  string
+		replaceLine string
+		deleteLine  int
+		source      string
+		priority    int
+	)
+
+	cmd := &cobra.Command{
+		Use:   "edit <id-or-title> [flags]",
+		Short: "Edit a note's metadata or content directly from the command line",
+		Long: `Edit a note's metadata or content using flags.
+
+Examples:
+  agentnotes edit myNote --title "New Title"
+  agentnotes edit myNote --add-tags "important,urgent"
+  agentnotes edit myNote --content "Full replacement"
+  agentnotes edit myNote --append "Added to end"
+  agentnotes edit myNote --insert "3:New line here"
+  echo "New content" | agentnotes edit myNote`,
+		Args: cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			note, err := app.Store.Get(args[0])
 			if err != nil {
 				return err
 			}
 
-			// Get the file path
-			path, err := app.Store.GetPath(args[0])
-			if err != nil {
-				return err
+			changed := false
+
+			// Check if stdin has data
+			stat, _ := os.Stdin.Stat()
+			stdinHasData := (stat.Mode() & os.ModeCharDevice) == 0
+
+			// Count content modification flags
+			contentFlagsUsed := 0
+			if cmd.Flags().Changed("content") {
+				contentFlagsUsed++
+			}
+			if cmd.Flags().Changed("append") {
+				contentFlagsUsed++
+			}
+			if cmd.Flags().Changed("prepend") {
+				contentFlagsUsed++
+			}
+			if cmd.Flags().Changed("insert") {
+				contentFlagsUsed++
+			}
+			if cmd.Flags().Changed("replace-line") {
+				contentFlagsUsed++
+			}
+			if cmd.Flags().Changed("delete-line") {
+				contentFlagsUsed++
+			}
+			if stdinHasData {
+				contentFlagsUsed++
 			}
 
-			// Open in editor
-			editor := os.Getenv("EDITOR")
-			if editor == "" {
-				editor = "vi"
+			if contentFlagsUsed > 1 {
+				return fmt.Errorf("content flags are mutually exclusive: use only one of --content, --append, --prepend, --insert, --replace-line, --delete-line, or stdin")
 			}
 
-			editorCmd := exec.Command(editor, path)
-			editorCmd.Stdin = os.Stdin
-			editorCmd.Stdout = os.Stdout
-			editorCmd.Stderr = os.Stderr
-
-			if err := editorCmd.Run(); err != nil {
-				return fmt.Errorf("editor failed: %w", err)
+			// Check tags mutual exclusivity
+			if cmd.Flags().Changed("tags") && (cmd.Flags().Changed("add-tags") || cmd.Flags().Changed("remove-tags")) {
+				return fmt.Errorf("--tags is mutually exclusive with --add-tags and --remove-tags")
 			}
 
-			// Re-read the note to get updated content
-			updatedNote, err := app.Store.Get(note.ID)
-			if err != nil {
-				return err
+			// Apply title change
+			if cmd.Flags().Changed("title") {
+				if strings.TrimSpace(title) == "" {
+					return fmt.Errorf("title cannot be empty")
+				}
+				note.Title = title
+				changed = true
 			}
 
-			// Update the updated timestamp
-			updatedNote.Updated = time.Now().UTC()
-			if err := app.Store.Update(updatedNote); err != nil {
+			// Apply tag changes
+			if cmd.Flags().Changed("tags") {
+				note.Tags = parseTags(tags)
+				changed = true
+			}
+			if cmd.Flags().Changed("add-tags") {
+				note.Tags = addTagsToList(note.Tags, parseTags(addTags))
+				changed = true
+			}
+			if cmd.Flags().Changed("remove-tags") {
+				note.Tags = removeTagsFromList(note.Tags, parseTags(removeTags))
+				changed = true
+			}
+
+			// Apply source change
+			if cmd.Flags().Changed("source") {
+				note.Source = source
+				changed = true
+			}
+
+			// Apply priority change
+			if cmd.Flags().Changed("priority") {
+				if priority < -1 || priority > 10 {
+					return fmt.Errorf("priority must be between 0 and 10 (or -1 to clear)")
+				}
+				if priority == -1 {
+					note.Priority = 0
+				} else {
+					note.Priority = priority
+				}
+				changed = true
+			}
+
+			// Apply content changes
+			if stdinHasData {
+				scanner := bufio.NewScanner(os.Stdin)
+				var contentBuilder strings.Builder
+				for scanner.Scan() {
+					contentBuilder.WriteString(scanner.Text())
+					contentBuilder.WriteString("\n")
+				}
+				note.Content = strings.TrimRight(contentBuilder.String(), "\n")
+				changed = true
+			} else if cmd.Flags().Changed("content") {
+				note.Content = content
+				changed = true
+			} else if cmd.Flags().Changed("append") {
+				if note.Content == "" {
+					note.Content = appendText
+				} else {
+					note.Content = note.Content + "\n" + appendText
+				}
+				changed = true
+			} else if cmd.Flags().Changed("prepend") {
+				if note.Content == "" {
+					note.Content = prependText
+				} else {
+					note.Content = prependText + "\n" + note.Content
+				}
+				changed = true
+			} else if cmd.Flags().Changed("insert") {
+				lineNum, text, err := parseLineEdit(insertLine)
+				if err != nil {
+					return fmt.Errorf("invalid --insert format: %w", err)
+				}
+				newContent, err := insertLineInContent(note.Content, lineNum, text)
+				if err != nil {
+					return err
+				}
+				note.Content = newContent
+				changed = true
+			} else if cmd.Flags().Changed("replace-line") {
+				lineNum, text, err := parseLineEdit(replaceLine)
+				if err != nil {
+					return fmt.Errorf("invalid --replace-line format: %w", err)
+				}
+				newContent, err := replaceLineInContent(note.Content, lineNum, text)
+				if err != nil {
+					return err
+				}
+				note.Content = newContent
+				changed = true
+			} else if cmd.Flags().Changed("delete-line") {
+				newContent, err := deleteLineInContent(note.Content, deleteLine)
+				if err != nil {
+					return err
+				}
+				note.Content = newContent
+				changed = true
+			}
+
+			// Check if any changes were made
+			if !changed {
+				return fmt.Errorf("no changes specified. Use flags to modify the note.\nRun 'agentnotes edit --help' for usage")
+			}
+
+			// Update timestamp and save
+			note.Updated = time.Now().UTC()
+			if err := app.Store.Update(note); err != nil {
 				return err
 			}
 
@@ -268,6 +409,24 @@ func (app *App) editCmd() *cobra.Command {
 			return nil
 		},
 	}
+
+	// Metadata flags
+	cmd.Flags().StringVarP(&title, "title", "t", "", "Set new title")
+	cmd.Flags().StringVar(&tags, "tags", "", "Replace all tags (comma-separated)")
+	cmd.Flags().StringVarP(&addTags, "add-tags", "a", "", "Add tags (comma-separated)")
+	cmd.Flags().StringVarP(&removeTags, "remove-tags", "r", "", "Remove tags (comma-separated)")
+	cmd.Flags().StringVarP(&source, "source", "s", "", "Set source field")
+	cmd.Flags().IntVarP(&priority, "priority", "p", 0, "Set priority (0-10, or -1 to clear)")
+
+	// Content flags
+	cmd.Flags().StringVarP(&content, "content", "c", "", "Replace entire content")
+	cmd.Flags().StringVar(&appendText, "append", "", "Append text to end of content")
+	cmd.Flags().StringVar(&prependText, "prepend", "", "Prepend text to start of content")
+	cmd.Flags().StringVar(&insertLine, "insert", "", "Insert text at line (format: \"LINE:text\")")
+	cmd.Flags().StringVar(&replaceLine, "replace-line", "", "Replace line (format: \"LINE:text\")")
+	cmd.Flags().IntVar(&deleteLine, "delete-line", 0, "Delete specific line number")
+
+	return cmd
 }
 
 // deleteCmd creates the delete command
@@ -390,4 +549,123 @@ func openEditor(initialContent string) (string, error) {
 	}
 
 	return strings.TrimRight(string(content), "\n"), nil
+}
+
+// parseTags splits a comma-separated tag string into a slice
+func parseTags(tagStr string) []string {
+	if tagStr == "" {
+		return nil
+	}
+	tags := strings.Split(tagStr, ",")
+	result := make([]string, 0, len(tags))
+	for _, t := range tags {
+		t = strings.TrimSpace(t)
+		if t != "" {
+			result = append(result, t)
+		}
+	}
+	return result
+}
+
+// addTagsToList adds tags to an existing list without duplicates (case-insensitive)
+func addTagsToList(existing, toAdd []string) []string {
+	result := make([]string, len(existing))
+	copy(result, existing)
+
+	for _, newTag := range toAdd {
+		found := false
+		for _, existingTag := range result {
+			if strings.EqualFold(existingTag, newTag) {
+				found = true
+				break
+			}
+		}
+		if !found {
+			result = append(result, newTag)
+		}
+	}
+	return result
+}
+
+// removeTagsFromList removes tags from an existing list (case-insensitive)
+func removeTagsFromList(existing, toRemove []string) []string {
+	result := make([]string, 0, len(existing))
+	for _, existingTag := range existing {
+		shouldRemove := false
+		for _, removeTag := range toRemove {
+			if strings.EqualFold(existingTag, removeTag) {
+				shouldRemove = true
+				break
+			}
+		}
+		if !shouldRemove {
+			result = append(result, existingTag)
+		}
+	}
+	return result
+}
+
+// parseLineEdit parses a "LINE:text" format string
+func parseLineEdit(input string) (int, string, error) {
+	parts := strings.SplitN(input, ":", 2)
+	if len(parts) != 2 {
+		return 0, "", fmt.Errorf("expected format \"LINE:text\", got %q", input)
+	}
+
+	var lineNum int
+	if _, err := fmt.Sscanf(parts[0], "%d", &lineNum); err != nil {
+		return 0, "", fmt.Errorf("invalid line number %q", parts[0])
+	}
+
+	if lineNum < 1 {
+		return 0, "", fmt.Errorf("line number must be at least 1")
+	}
+
+	return lineNum, parts[1], nil
+}
+
+// insertLineInContent inserts text at a specific line number (1-based)
+func insertLineInContent(content string, lineNum int, text string) (string, error) {
+	lines := strings.Split(content, "\n")
+
+	// Allow inserting at line after the last line (appending)
+	if lineNum > len(lines)+1 {
+		return "", fmt.Errorf("line %d is out of range (content has %d lines)", lineNum, len(lines))
+	}
+
+	// Insert at position lineNum-1 (0-based index)
+	idx := lineNum - 1
+	newLines := make([]string, 0, len(lines)+1)
+	newLines = append(newLines, lines[:idx]...)
+	newLines = append(newLines, text)
+	newLines = append(newLines, lines[idx:]...)
+
+	return strings.Join(newLines, "\n"), nil
+}
+
+// replaceLineInContent replaces a specific line (1-based)
+func replaceLineInContent(content string, lineNum int, text string) (string, error) {
+	lines := strings.Split(content, "\n")
+
+	if lineNum < 1 || lineNum > len(lines) {
+		return "", fmt.Errorf("line %d is out of range (content has %d lines)", lineNum, len(lines))
+	}
+
+	lines[lineNum-1] = text
+	return strings.Join(lines, "\n"), nil
+}
+
+// deleteLineInContent deletes a specific line (1-based)
+func deleteLineInContent(content string, lineNum int) (string, error) {
+	lines := strings.Split(content, "\n")
+
+	if lineNum < 1 || lineNum > len(lines) {
+		return "", fmt.Errorf("line %d is out of range (content has %d lines)", lineNum, len(lines))
+	}
+
+	newLines := make([]string, 0, len(lines)-1)
+	newLines = append(newLines, lines[:lineNum-1]...)
+	newLines = append(newLines, lines[lineNum:]...)
+
+	return strings.Join(newLines, "\n"), nil
 }
