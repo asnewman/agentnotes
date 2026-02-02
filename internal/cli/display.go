@@ -1,0 +1,137 @@
+package cli
+
+import (
+	"fmt"
+	"strings"
+
+	"github.com/ashleynewman/agentnotes/internal/notes"
+)
+
+// ANSI color codes
+const (
+	Reset      = "\033[0m"
+	Bold       = "\033[1m"
+	Dim        = "\033[2m"
+	Cyan       = "\033[36m"
+	Green      = "\033[32m"
+	Yellow     = "\033[33m"
+	Blue       = "\033[34m"
+	Magenta    = "\033[35m"
+	BoldCyan   = "\033[1;36m"
+	BoldGreen  = "\033[1;32m"
+	BoldYellow = "\033[1;33m"
+)
+
+// FormatNoteList formats a list of notes for terminal display
+func FormatNoteList(noteList []*notes.Note) string {
+	if len(noteList) == 0 {
+		return Dim + "No notes found." + Reset
+	}
+
+	var sb strings.Builder
+
+	for i, note := range noteList {
+		if i > 0 {
+			sb.WriteString("\n")
+		}
+
+		// Title and ID
+		sb.WriteString(BoldCyan + note.Title + Reset)
+		sb.WriteString(Dim + " [" + note.ID[:8] + "...]" + Reset)
+		sb.WriteString("\n")
+
+		// Date and priority
+		sb.WriteString(Dim + "  " + note.Created.Format("2006-01-02 15:04") + Reset)
+		if note.Priority > 0 {
+			sb.WriteString(Yellow + fmt.Sprintf(" (priority: %d)", note.Priority) + Reset)
+		}
+		sb.WriteString("\n")
+
+		// Tags
+		if len(note.Tags) > 0 {
+			sb.WriteString("  ")
+			for j, tag := range note.Tags {
+				if j > 0 {
+					sb.WriteString(" ")
+				}
+				sb.WriteString(Green + "#" + tag + Reset)
+			}
+			sb.WriteString("\n")
+		}
+	}
+
+	return sb.String()
+}
+
+// FormatNoteDetail formats a single note for detailed display
+func FormatNoteDetail(note *notes.Note) string {
+	var sb strings.Builder
+
+	// Header
+	sb.WriteString(Bold + "─────────────────────────────────────────────\n" + Reset)
+	sb.WriteString(BoldCyan + note.Title + Reset + "\n")
+	sb.WriteString(Bold + "─────────────────────────────────────────────\n" + Reset)
+
+	// Metadata
+	sb.WriteString(Dim + "ID:       " + Reset + note.ID + "\n")
+	sb.WriteString(Dim + "Created:  " + Reset + note.Created.Format("2006-01-02 15:04:05 MST") + "\n")
+	sb.WriteString(Dim + "Updated:  " + Reset + note.Updated.Format("2006-01-02 15:04:05 MST") + "\n")
+
+	if note.Priority > 0 {
+		sb.WriteString(Dim + "Priority: " + Reset + fmt.Sprintf("%d", note.Priority) + "\n")
+	}
+
+	if len(note.Tags) > 0 {
+		sb.WriteString(Dim + "Tags:     " + Reset)
+		for i, tag := range note.Tags {
+			if i > 0 {
+				sb.WriteString(", ")
+			}
+			sb.WriteString(Green + tag + Reset)
+		}
+		sb.WriteString("\n")
+	}
+
+	sb.WriteString(Bold + "─────────────────────────────────────────────\n" + Reset)
+
+	// Content
+	sb.WriteString("\n")
+	sb.WriteString(note.Content)
+	sb.WriteString("\n")
+
+	return sb.String()
+}
+
+// FormatTags formats a list of tags with counts
+func FormatTags(tags []notes.TagCount) string {
+	if len(tags) == 0 {
+		return Dim + "No tags found." + Reset
+	}
+
+	var sb strings.Builder
+
+	sb.WriteString(Bold + "Tags:\n" + Reset)
+
+	for _, tc := range tags {
+		sb.WriteString(fmt.Sprintf("  %s%-20s%s %s(%d)%s\n",
+			Green, "#"+tc.Tag, Reset,
+			Dim, tc.Count, Reset))
+	}
+
+	return sb.String()
+}
+
+// Success prints a success message
+func Success(msg string) string {
+	return BoldGreen + "✓ " + Reset + msg
+}
+
+// Error prints an error message
+func Error(msg string) string {
+	return "\033[1;31m✗ " + Reset + msg
+}
+
+// Info prints an info message
+func Info(msg string) string {
+	return Cyan + "ℹ " + Reset + msg
+}
