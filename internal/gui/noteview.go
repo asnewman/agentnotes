@@ -14,9 +14,10 @@ import (
 
 // NoteView displays the content and metadata of a selected note
 type NoteView struct {
-	container    *fyne.Container
-	commentView  *CommentView
-	currentNote  *notes.Note
+	container          *fyne.Container
+	commentView        *CommentView
+	inlineCommentPanel *InlineCommentPanel
+	currentNote        *notes.Note
 
 	// Header elements
 	titleLabel    *widget.Label
@@ -25,11 +26,11 @@ type NoteView struct {
 	tagsContainer *fyne.Container
 	priorityLabel *widget.Label
 
-	// Content
-	contentText *widget.Label
+	// Content area
+	contentContainer *fyne.Container
 
-	// Scrollable content
-	scroll *container.Scroll
+	// Split container for content and inline comments
+	contentSplit *container.Split
 }
 
 // NewNoteView creates a new note view widget
@@ -51,12 +52,14 @@ func NewNoteView() *NoteView {
 	// Priority
 	nv.priorityLabel = widget.NewLabel("")
 
-	// Content
-	nv.contentText = widget.NewLabel("")
-	nv.contentText.Wrapping = fyne.TextWrapWord
+	// Content container (will hold line-numbered content)
+	nv.contentContainer = container.NewVBox()
 
-	// Comment view
+	// Comment view (for non-inline comments)
 	nv.commentView = NewCommentView()
+
+	// Inline comment panel (right panel)
+	nv.inlineCommentPanel = NewInlineCommentPanel()
 
 	// Build header
 	metaRow := container.NewHBox(
@@ -73,21 +76,25 @@ func NewNoteView() *NoteView {
 		widget.NewSeparator(),
 	)
 
-	// Main content area with comments
-	contentArea := container.NewVBox(
-		nv.contentText,
+	// Left side: content with line numbers + general comments below
+	leftContent := container.NewVBox(
+		nv.contentContainer,
 		widget.NewSeparator(),
 		nv.commentView.Container(),
 	)
 
-	// Scrollable content
-	nv.scroll = container.NewVScroll(contentArea)
+	// Scrollable left content
+	leftScroll := container.NewVScroll(leftContent)
+
+	// Horizontal split: content on left, inline comments on right
+	nv.contentSplit = container.NewHSplit(leftScroll, nv.inlineCommentPanel.Container())
+	nv.contentSplit.SetOffset(0.7) // 70% for content, 30% for inline comments
 
 	// Main container
 	nv.container = container.NewBorder(
 		container.NewPadded(header),
 		nil, nil, nil,
-		container.NewPadded(nv.scroll),
+		container.NewPadded(nv.contentSplit),
 	)
 
 	// Show placeholder initially
@@ -107,8 +114,12 @@ func (nv *NoteView) SetNote(note *notes.Note) {
 		nv.tagsContainer.Objects = nil
 		nv.tagsContainer.Refresh()
 		nv.priorityLabel.SetText("")
-		nv.contentText.SetText("Select a note from the list to view its contents.")
+		placeholder := widget.NewLabel("Select a note from the list to view its contents.")
+		placeholder.TextStyle = fyne.TextStyle{Italic: true}
+		nv.contentContainer.Objects = []fyne.CanvasObject{placeholder}
+		nv.contentContainer.Refresh()
 		nv.commentView.SetComments(nil)
+		nv.inlineCommentPanel.SetComments(nil)
 		return
 	}
 
@@ -129,14 +140,25 @@ func (nv *NoteView) SetNote(note *notes.Note) {
 		nv.priorityLabel.SetText("")
 	}
 
-	// Update content
-	nv.contentText.SetText(note.Content)
+	// Update inline comments panel first (to get commented lines)
+	nv.inlineCommentPanel.SetComments(note.Comments)
 
-	// Update comments
-	nv.commentView.SetComments(note.Comments)
+	// Get lines that have comments for highlighting
+	commentedLines := nv.inlineCommentPanel.GetCommentedLines()
 
-	// Scroll to top
-	nv.scroll.ScrollToTop()
+	// Build line-numbered content with highlights
+	lineContent := BuildLineNumberedContent(note.Content, commentedLines)
+	nv.contentContainer.Objects = []fyne.CanvasObject{lineContent}
+	nv.contentContainer.Refresh()
+
+	// Filter for general comments (non-inline) for bottom section
+	var generalComments []notes.Comment
+	for _, c := range note.Comments {
+		if c.Line == 0 {
+			generalComments = append(generalComments, c)
+		}
+	}
+	nv.commentView.SetComments(generalComments)
 }
 
 // updateTags updates the tags display

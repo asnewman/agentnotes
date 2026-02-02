@@ -13,8 +13,10 @@ A local-first CLI knowledge base storing markdown notes with YAML frontmatter.
 - `internal/cli/display.go` - Terminal formatting with ANSI colors
 - `internal/gui/app.go` - Fyne app setup and main window
 - `internal/gui/notelist.go` - Left sidebar with scrollable note list
-- `internal/gui/noteview.go` - Right panel for note content and metadata
-- `internal/gui/commentview.go` - Comment display components
+- `internal/gui/noteview.go` - Main panel with content and inline comments split
+- `internal/gui/commentview.go` - General comment display (non-inline comments)
+- `internal/gui/inlinecomments.go` - Right panel for inline comments (with line numbers)
+- `internal/gui/linecontent.go` - Content display with line highlighting for commented lines
 
 ## Storage
 
@@ -41,7 +43,12 @@ go build -o agentnotes-gui ./cmd/agentnotes-gui
 ./agentnotes-gui
 ```
 
-The GUI provides a read-only view of notes with a split layout: note list on the left, note content/metadata/comments on the right.
+The GUI provides a read-only view of notes with a three-panel layout:
+- Left: Note list
+- Center: Note content with metadata (lines with comments are subtly highlighted)
+- Right: Inline comments panel showing comments with line references
+
+General comments (without line numbers) appear below the note content.
 
 ## Testing Notes
 
