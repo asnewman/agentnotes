@@ -1,0 +1,63 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline';">
+  <title>AgentNotes</title>
+  <link rel="stylesheet" href="styles/main.css">
+  <link rel="stylesheet" href="styles/components.css">
+</head>
+<body>
+  <div class="title-bar" id="titleBar">
+    <div class="title-bar-controls">
+      <svg class="title-bar-btn" id="btnClose" width="12" height="12" viewBox="0 0 12 12">
+        <circle cx="6" cy="6" r="6" fill="#ff5f57" class="btn-bg"/>
+        <path class="btn-icon" d="M4 4L8 8M8 4L4 8" stroke="rgba(0,0,0,0.5)" stroke-width="1.2" stroke-linecap="round"/>
+      </svg>
+      <svg class="title-bar-btn" id="btnMinimize" width="12" height="12" viewBox="0 0 12 12">
+        <circle cx="6" cy="6" r="6" fill="#ffbd2e" class="btn-bg"/>
+        <path class="btn-icon" d="M4 6H8" stroke="rgba(0,0,0,0.5)" stroke-width="1.2" stroke-linecap="round"/>
+      </svg>
+      <svg class="title-bar-btn" id="btnMaximize" width="12" height="12" viewBox="0 0 12 12">
+        <circle cx="6" cy="6" r="6" fill="#28c940" class="btn-bg"/>
+        <rect class="btn-icon" x="4" y="4" width="4" height="4" stroke="rgba(0,0,0,0.5)" stroke-width="1" fill="none" rx="0.5"/>
+      </svg>
+    </div>
+    <div class="title-bar-title">AgentNotes</div>
+    <div class="title-bar-spacer"></div>
+  </div>
+  <div class="app">
+    <aside class="note-list-panel" id="noteListPanel">
+      <div class="panel-header">
+        <h2>Notes</h2>
+      </div>
+      <div class="note-list" id="noteList">
+        <!-- Notes will be rendered here -->
+      </div>
+    </aside>
+
+    <main class="note-view-panel" id="noteViewPanel">
+      <div class="note-header" id="noteHeader">
+        <h1 class="note-title">Select a note</h1>
+        <div class="note-meta"></div>
+        <div class="note-tags"></div>
+      </div>
+      <div class="note-content" id="noteContent">
+        <p class="empty-state">Select a note from the list to view its content.</p>
+      </div>
+    </main>
+
+    <aside class="comments-panel" id="commentsPanel">
+      <div class="panel-header">
+        <h2>Comments</h2>
+      </div>
+      <div class="comments-list" id="commentsList">
+        <p class="empty-state">No comments</p>
+      </div>
+    </aside>
+  </div>
+
+  <script src="bundle.js"></script>
+</body>
+</html>
