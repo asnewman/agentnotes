@@ -15,7 +15,6 @@ import (
 // NoteView displays the content and metadata of a selected note
 type NoteView struct {
 	container          *fyne.Container
-	commentView        *CommentView
 	inlineCommentPanel *InlineCommentPanel
 	currentNote        *notes.Note
 
@@ -52,13 +51,10 @@ func NewNoteView() *NoteView {
 	// Priority
 	nv.priorityLabel = widget.NewLabel("")
 
-	// Content container (will hold line-numbered content)
+	// Content container (will hold content)
 	nv.contentContainer = container.NewVBox()
 
-	// Comment view (for non-inline comments)
-	nv.commentView = NewCommentView()
-
-	// Inline comment panel (right panel)
+	// Inline comment panel (right panel) - all comments go here now
 	nv.inlineCommentPanel = NewInlineCommentPanel()
 
 	// Build header
@@ -76,19 +72,17 @@ func NewNoteView() *NoteView {
 		widget.NewSeparator(),
 	)
 
-	// Left side: content with line numbers + general comments below
+	// Left side: content only (all comments now go to the right panel)
 	leftContent := container.NewVBox(
 		nv.contentContainer,
-		widget.NewSeparator(),
-		nv.commentView.Container(),
 	)
 
 	// Scrollable left content
 	leftScroll := container.NewVScroll(leftContent)
 
-	// Horizontal split: content on left, inline comments on right
+	// Horizontal split: content on left, comments on right
 	nv.contentSplit = container.NewHSplit(leftScroll, nv.inlineCommentPanel.Container())
-	nv.contentSplit.SetOffset(0.7) // 70% for content, 30% for inline comments
+	nv.contentSplit.SetOffset(0.7) // 70% for content, 30% for comments
 
 	// Main container
 	nv.container = container.NewBorder(
@@ -118,7 +112,6 @@ func (nv *NoteView) SetNote(note *notes.Note) {
 		placeholder.TextStyle = fyne.TextStyle{Italic: true}
 		nv.contentContainer.Objects = []fyne.CanvasObject{placeholder}
 		nv.contentContainer.Refresh()
-		nv.commentView.SetComments(nil)
 		nv.inlineCommentPanel.SetComments(nil)
 		return
 	}
@@ -140,23 +133,23 @@ func (nv *NoteView) SetNote(note *notes.Note) {
 		nv.priorityLabel.SetText("")
 	}
 
-	// Update inline comments panel
+	// Update comments panel (all comments now have character ranges)
 	nv.inlineCommentPanel.SetComments(note.Comments)
 
-	// Render content as styled markdown
-	richText := widget.NewRichTextFromMarkdown(note.Content)
-	richText.Wrapping = fyne.TextWrapWord
-	nv.contentContainer.Objects = []fyne.CanvasObject{richText}
-	nv.contentContainer.Refresh()
-
-	// Filter for general comments (non-inline) for bottom section
-	var generalComments []notes.Comment
-	for _, c := range note.Comments {
-		if c.Line == 0 {
-			generalComments = append(generalComments, c)
-		}
+	// Render content - use TextGrid with highlighting if there are comments,
+	// otherwise use RichText with markdown rendering
+	ranges := nv.inlineCommentPanel.GetCommentedRanges()
+	if len(ranges) > 0 {
+		// Use TextGrid for highlighting (plain text, no markdown)
+		textGrid := CreateHighlightedContent(note.Content, ranges)
+		nv.contentContainer.Objects = []fyne.CanvasObject{textGrid}
+	} else {
+		// Use RichText for markdown rendering (no comments)
+		richText := widget.NewRichTextFromMarkdown(note.Content)
+		richText.Wrapping = fyne.TextWrapWord
+		nv.contentContainer.Objects = []fyne.CanvasObject{richText}
 	}
-	nv.commentView.SetComments(generalComments)
+	nv.contentContainer.Refresh()
 }
 
 // updateTags updates the tags display
