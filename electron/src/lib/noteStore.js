@@ -34,6 +34,26 @@ export function clearCache() {
 }
 
 /**
+ * Add a comment to a note
+ * @param {string} noteId - The note ID (ULID)
+ * @param {string} content - The comment content
+ * @param {string} author - The comment author (optional)
+ * @param {number} startChar - Start character position
+ * @param {number} endChar - End character position
+ * @returns {Promise<Object>} Result with success status and updated note
+ */
+export async function addComment(noteId, content, author, startChar, endChar) {
+  const result = await window.api.addComment(noteId, content, author, startChar, endChar);
+
+  // Clear cache if comment was added successfully
+  if (result.success) {
+    clearCache();
+  }
+
+  return result;
+}
+
+/**
  * Format a date for display
  * @param {string} isoDate - ISO date string
  * @returns {string} Formatted date string

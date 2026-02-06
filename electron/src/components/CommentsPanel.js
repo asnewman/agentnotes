@@ -5,11 +5,34 @@
 import { formatDateTime } from '../lib/noteStore.js';
 
 /**
+ * Extract and truncate text preview from content
+ * @param {string} content - The full note content
+ * @param {number} startChar - Start character position
+ * @param {number} endChar - End character position
+ * @param {number} maxLength - Maximum preview length (default 50)
+ * @returns {string} The truncated preview text
+ */
+function getTextPreview(content, startChar, endChar, maxLength = 50) {
+  if (!content || startChar === undefined || endChar === undefined) {
+    return null;
+  }
+
+  const text = content.substring(startChar, endChar);
+  if (!text) return null;
+
+  if (text.length > maxLength) {
+    return text.substring(0, maxLength - 3) + '...';
+  }
+  return text;
+}
+
+/**
  * Create a comment card element
  * @param {Object} comment - The comment object
+ * @param {string} noteContent - The note's raw content (for text preview)
  * @returns {HTMLElement} The comment card element
  */
-function createCommentCard(comment) {
+function createCommentCard(comment, noteContent) {
   const card = document.createElement('div');
   card.className = 'comment-card';
 
@@ -40,6 +63,15 @@ function createCommentCard(comment) {
     rangeBadge.className = 'comment-line';
     rangeBadge.textContent = `Chars ${comment.startChar}-${comment.endChar}`;
     card.appendChild(rangeBadge);
+
+    // Add text preview for character-based comments
+    const previewText = getTextPreview(noteContent, comment.startChar, comment.endChar);
+    if (previewText) {
+      const preview = document.createElement('div');
+      preview.className = 'comment-preview';
+      preview.textContent = `"${previewText}"`;
+      card.appendChild(preview);
+    }
   }
 
   // Content
@@ -61,14 +93,178 @@ export class CommentsPanel {
   constructor(container) {
     this.container = container;
     this.comments = [];
+    this.noteContent = '';
+    this.pendingComment = null;
+    this.onCommentSubmitCallback = null;
+  }
+
+  /**
+   * Set callback for when a comment is submitted
+   * @param {Function} callback - Callback(content, startChar, endChar)
+   */
+  setOnCommentSubmit(callback) {
+    this.onCommentSubmitCallback = callback;
+  }
+
+  /**
+   * Start creating a new comment
+   * @param {number} startChar - Start character position
+   * @param {number} endChar - End character position
+   * @param {string} selectedText - The selected text
+   */
+  startNewComment(startChar, endChar, selectedText) {
+    this.pendingComment = {
+      startChar,
+      endChar,
+      selectedText: selectedText.length > 50
+        ? selectedText.substring(0, 47) + '...'
+        : selectedText
+    };
+    this.renderWithPending();
+  }
+
+  /**
+   * Cancel the pending comment
+   */
+  cancelPendingComment() {
+    this.pendingComment = null;
+    this.render(this.comments);
+  }
+
+  /**
+   * Submit the pending comment
+   * @param {string} content - The comment content
+   */
+  submitPendingComment(content) {
+    if (!this.pendingComment || !content.trim()) {
+      return;
+    }
+
+    if (this.onCommentSubmitCallback) {
+      this.onCommentSubmitCallback(
+        content.trim(),
+        this.pendingComment.startChar,
+        this.pendingComment.endChar
+      );
+    }
+
+    this.pendingComment = null;
+  }
+
+  /**
+   * Create the pending comment card element
+   * @returns {HTMLElement} The pending comment card
+   */
+  createPendingCommentCard() {
+    const card = document.createElement('div');
+    card.className = 'comment-card comment-card-pending';
+
+    // Header
+    const header = document.createElement('div');
+    header.className = 'comment-header';
+
+    const title = document.createElement('span');
+    title.className = 'comment-author';
+    title.textContent = 'New Comment';
+
+    const rangeBadge = document.createElement('span');
+    rangeBadge.className = 'comment-line-badge';
+    rangeBadge.textContent = `Chars ${this.pendingComment.startChar}-${this.pendingComment.endChar}`;
+
+    header.appendChild(title);
+    header.appendChild(rangeBadge);
+    card.appendChild(header);
+
+    // Selected text preview
+    const preview = document.createElement('div');
+    preview.className = 'comment-preview';
+    preview.textContent = `"${this.pendingComment.selectedText}"`;
+    card.appendChild(preview);
+
+    // Textarea
+    const textarea = document.createElement('textarea');
+    textarea.className = 'comment-textarea';
+    textarea.placeholder = 'Write your comment...';
+    textarea.rows = 3;
+
+    // Handle keyboard events
+    textarea.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter' && !e.shiftKey) {
+        e.preventDefault();
+        this.submitPendingComment(textarea.value);
+      } else if (e.key === 'Escape') {
+        e.preventDefault();
+        this.cancelPendingComment();
+      }
+    });
+
+    card.appendChild(textarea);
+
+    // Buttons
+    const buttonRow = document.createElement('div');
+    buttonRow.className = 'comment-buttons';
+
+    const cancelBtn = document.createElement('button');
+    cancelBtn.className = 'comment-btn comment-btn-cancel';
+    cancelBtn.textContent = 'Cancel';
+    cancelBtn.addEventListener('click', () => this.cancelPendingComment());
+
+    const saveBtn = document.createElement('button');
+    saveBtn.className = 'comment-btn comment-btn-save';
+    saveBtn.textContent = 'Save';
+    saveBtn.addEventListener('click', () => this.submitPendingComment(textarea.value));
+
+    buttonRow.appendChild(cancelBtn);
+    buttonRow.appendChild(saveBtn);
+    card.appendChild(buttonRow);
+
+    // Focus textarea after adding to DOM
+    setTimeout(() => textarea.focus(), 0);
+
+    return card;
+  }
+
+  /**
+   * Render comments with pending comment card at top
+   */
+  renderWithPending() {
+    this.container.innerHTML = '';
+
+    // Add pending comment card first
+    if (this.pendingComment) {
+      this.container.appendChild(this.createPendingCommentCard());
+    }
+
+    // Add existing comments
+    if (this.comments.length === 0 && !this.pendingComment) {
+      const empty = document.createElement('p');
+      empty.className = 'empty-state';
+      empty.textContent = 'No comments';
+      this.container.appendChild(empty);
+      return;
+    }
+
+    // Sort and render existing comments
+    const sortedComments = [...this.comments].sort((a, b) => {
+      if (a.line && b.line) return a.line - b.line;
+      if (a.line && !b.line) return -1;
+      if (!a.line && b.line) return 1;
+      return new Date(a.created) - new Date(b.created);
+    });
+
+    sortedComments.forEach(comment => {
+      this.container.appendChild(createCommentCard(comment, this.noteContent));
+    });
   }
 
   /**
    * Render comments for a note
    * @param {Array} comments - Array of comment objects
+   * @param {string} noteContent - The note's raw content (for text preview)
    */
-  render(comments) {
+  render(comments, noteContent = '') {
     this.comments = comments || [];
+    this.noteContent = noteContent;
     this.container.innerHTML = '';
 
     if (this.comments.length === 0) {
@@ -98,7 +294,7 @@ export class CommentsPanel {
     });
 
     sortedComments.forEach(comment => {
-      this.container.appendChild(createCommentCard(comment));
+      this.container.appendChild(createCommentCard(comment, this.noteContent));
     });
   }
 

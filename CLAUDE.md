@@ -18,7 +18,7 @@ A local-first CLI knowledge base storing markdown notes with YAML frontmatter.
   - `src/styles/main.css` - Core styles including title bar
   - `src/styles/components.css` - Component-specific styles
   - `src/components/` - UI components (NoteList, NoteView, CommentsPanel)
-  - `src/lib/` - Utilities (noteStore, markdown renderer)
+  - `src/lib/` - Utilities (noteStore, highlighter, positionMapper)
 
 ## Storage
 
@@ -66,12 +66,19 @@ The Electron app features:
 - SVG-based window control buttons for pixel-perfect circles
 - Directory hierarchy with collapsible folders in the note list
 
-The GUI provides a read-only view of notes with a three-panel layout:
+The GUI provides a three-panel layout:
 - Left: Note list with directory tree (folders are collapsible, notes show document icons)
-- Center: Note content with metadata (rendered as styled markdown)
-- Right: Inline comments panel showing comments with line references
+- Center: Note content with metadata (rendered as styled markdown via TipTap)
+- Right: Inline comments panel showing comments with text previews
 
-General comments (without line numbers) appear below the note content.
+### Creating Comments in GUI
+Users can create comments by highlighting text in the note view:
+1. Select text in the note content
+2. A tooltip appears above the selection with a "Comment" button
+3. Click the button to open a pending comment card in the comments panel
+4. Type the comment and press Enter to save (Escape to cancel, Shift+Enter for newlines)
+
+Comments are stored with character positions (`start_char`/`end_char`) and the highlighted text gets a yellow background. The comments panel shows a preview of the highlighted text for each comment.
 
 ## Testing Notes
 

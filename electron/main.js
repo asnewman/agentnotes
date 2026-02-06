@@ -2,6 +2,7 @@ const { app, BrowserWindow, ipcMain } = require('electron');
 const path = require('path');
 const fs = require('fs');
 const matter = require('gray-matter');
+const { ulid } = require('ulid');
 
 let mainWindow;
 
@@ -169,4 +170,61 @@ ipcMain.on('window:maximize', () => {
 
 ipcMain.on('window:close', () => {
   mainWindow?.close();
+});
+
+// IPC handler: Add a comment to a note
+ipcMain.handle('notes:addComment', async (event, { noteId, content, author, startChar, endChar }) => {
+  const notesDir = getNotesDir();
+
+  if (!fs.existsSync(notesDir)) {
+    return { success: false, error: 'Notes directory not found' };
+  }
+
+  try {
+    const files = getAllMarkdownFiles(notesDir);
+
+    // Find the note file by ID
+    for (const { fullPath, relativePath } of files) {
+      const fileContent = fs.readFileSync(fullPath, 'utf-8');
+      const { data, content: markdownContent } = matter(fileContent);
+
+      if (data.id === noteId) {
+        // Create new comment
+        const newComment = {
+          id: ulid(),
+          author: author || '',
+          start_char: startChar,
+          end_char: endChar,
+          created: new Date().toISOString(),
+          content: content
+        };
+
+        // Initialize comments array if not present
+        if (!data.comments) {
+          data.comments = [];
+        }
+
+        // Add the new comment
+        data.comments.push(newComment);
+
+        // Update the 'updated' timestamp
+        data.updated = new Date().toISOString();
+
+        // Write the file back
+        const updatedFile = matter.stringify(markdownContent, data);
+        fs.writeFileSync(fullPath, updatedFile, 'utf-8');
+
+        // Return the updated note
+        return {
+          success: true,
+          note: parseNoteFile(fullPath, relativePath)
+        };
+      }
+    }
+
+    return { success: false, error: 'Note not found' };
+  } catch (err) {
+    console.error('Error adding comment:', err);
+    return { success: false, error: err.message };
+  }
 });

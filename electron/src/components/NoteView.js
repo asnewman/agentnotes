@@ -8,6 +8,7 @@ import Highlight from '@tiptap/extension-highlight';
 import { formatDate } from '../lib/noteStore.js';
 import { createTagChip, createPriorityBadge } from './TagChip.js';
 import { getAllHighlightRanges } from '../lib/highlighter.js';
+import { findTextInContent, getTextFromEditor } from '../lib/positionMapper.js';
 
 /**
  * NoteView class - manages the note content panel
@@ -22,6 +23,17 @@ export class NoteView {
     this.contentContainer = contentContainer;
     this.editor = null;
     this.currentNote = null;
+    this.tooltip = null;
+    this.onCommentCreateCallback = null;
+    this.currentSelection = null;
+  }
+
+  /**
+   * Set callback for when user wants to create a comment
+   * @param {Function} callback - Callback(startChar, endChar, selectedText)
+   */
+  setOnCommentCreate(callback) {
+    this.onCommentCreateCallback = callback;
   }
 
   /**
@@ -51,8 +63,126 @@ export class NoteView {
         })
       ],
       content: '',
-      editable: false // Read-only mode
+      editable: false, // Read-only mode
+      onSelectionUpdate: ({ editor }) => {
+        this.handleSelectionUpdate(editor);
+      }
     });
+
+    // Hide tooltip when clicking outside
+    document.addEventListener('mousedown', (e) => {
+      if (this.tooltip && !this.tooltip.contains(e.target)) {
+        this.hideSelectionTooltip();
+      }
+    });
+  }
+
+  /**
+   * Handle selection update from TipTap editor
+   * @param {Object} editor - TipTap editor instance
+   */
+  handleSelectionUpdate(editor) {
+    const { from, to } = editor.state.selection;
+
+    if (from === to || !this.currentNote) {
+      this.hideSelectionTooltip();
+      return;
+    }
+
+    const selectedText = getTextFromEditor(editor, from, to);
+    if (!selectedText || selectedText.trim().length === 0) {
+      this.hideSelectionTooltip();
+      return;
+    }
+
+    // Find the position in raw content
+    const positions = findTextInContent(this.currentNote.content, selectedText, from);
+    if (!positions) {
+      this.hideSelectionTooltip();
+      return;
+    }
+
+    this.currentSelection = {
+      startChar: positions.startChar,
+      endChar: positions.endChar,
+      text: selectedText
+    };
+
+    this.showSelectionTooltip();
+  }
+
+  /**
+   * Show the selection tooltip near the selected text
+   */
+  showSelectionTooltip() {
+    const selection = window.getSelection();
+    if (!selection || selection.rangeCount === 0) {
+      return;
+    }
+
+    const range = selection.getRangeAt(0);
+    const rect = range.getBoundingClientRect();
+
+    if (!this.tooltip) {
+      this.createTooltip();
+    }
+
+    // Position tooltip above the selection
+    const tooltipHeight = 32;
+    const arrowHeight = 6;
+    const top = rect.top - tooltipHeight - arrowHeight - 4;
+    const left = rect.left + (rect.width / 2);
+
+    this.tooltip.style.top = `${top}px`;
+    this.tooltip.style.left = `${left}px`;
+    this.tooltip.classList.add('visible');
+  }
+
+  /**
+   * Hide the selection tooltip
+   */
+  hideSelectionTooltip() {
+    if (this.tooltip) {
+      this.tooltip.classList.remove('visible');
+    }
+    this.currentSelection = null;
+  }
+
+  /**
+   * Create the selection tooltip element
+   */
+  createTooltip() {
+    this.tooltip = document.createElement('div');
+    this.tooltip.className = 'selection-tooltip';
+
+    const button = document.createElement('button');
+    button.className = 'selection-tooltip-button';
+    button.innerHTML = `<span class="tooltip-icon">&#128172;</span> Comment`;
+
+    button.addEventListener('click', (e) => {
+      e.stopPropagation();
+      this.handleCommentClick();
+    });
+
+    this.tooltip.appendChild(button);
+    document.body.appendChild(this.tooltip);
+  }
+
+  /**
+   * Handle click on the comment button in tooltip
+   */
+  handleCommentClick() {
+    if (this.currentSelection && this.onCommentCreateCallback) {
+      this.onCommentCreateCallback(
+        this.currentSelection.startChar,
+        this.currentSelection.endChar,
+        this.currentSelection.text
+      );
+    }
+    this.hideSelectionTooltip();
+
+    // Clear the selection
+    window.getSelection()?.removeAllRanges();
   }
 
   /**
@@ -270,6 +400,10 @@ export class NoteView {
     if (this.editor) {
       this.editor.destroy();
       this.editor = null;
+    }
+    if (this.tooltip) {
+      this.tooltip.remove();
+      this.tooltip = null;
     }
   }
 }

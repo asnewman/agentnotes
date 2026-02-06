@@ -345,3 +345,145 @@
   line-height: 1.5;
   color: var(--text-secondary);
 }
+
+/* Selection Tooltip */
+.selection-tooltip {
+  position: fixed;
+  z-index: 1000;
+  transform: translateX(-50%);
+  opacity: 0;
+  visibility: hidden;
+  transition: opacity 0.15s ease, visibility 0.15s ease, transform 0.15s ease;
+  pointer-events: none;
+}
+
+.selection-tooltip.visible {
+  opacity: 1;
+  visibility: visible;
+  pointer-events: auto;
+}
+
+.selection-tooltip-button {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 6px 12px;
+  background-color: var(--bg-primary);
+  border: 1px solid var(--border-color);
+  border-radius: 6px;
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--text-primary);
+  cursor: pointer;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
+  transition: background-color 0.15s ease;
+}
+
+.selection-tooltip-button:hover {
+  background-color: var(--bg-hover);
+}
+
+.tooltip-icon {
+  font-size: 14px;
+}
+
+/* Arrow pointing down from tooltip */
+.selection-tooltip::after {
+  content: '';
+  position: absolute;
+  top: 100%;
+  left: 50%;
+  transform: translateX(-50%);
+  border: 6px solid transparent;
+  border-top-color: var(--border-color);
+}
+
+/* Pending Comment Card */
+.comment-card-pending {
+  border: 2px solid var(--accent-color);
+  background-color: var(--bg-secondary);
+}
+
+.comment-line-badge {
+  display: inline-block;
+  background-color: var(--highlight-bg);
+  padding: 2px 6px;
+  border-radius: 4px;
+  font-size: 10px;
+  font-weight: 500;
+  color: var(--text-secondary);
+}
+
+.comment-preview {
+  font-size: 12px;
+  font-style: italic;
+  color: var(--text-muted);
+  margin-bottom: 10px;
+  padding: 8px;
+  background-color: var(--bg-tertiary);
+  border-radius: 4px;
+  border-left: 3px solid var(--accent-color);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.comment-textarea {
+  width: 100%;
+  padding: 10px;
+  font-family: inherit;
+  font-size: 13px;
+  border: 1px solid var(--border-color);
+  border-radius: 6px;
+  background-color: var(--bg-primary);
+  color: var(--text-primary);
+  resize: vertical;
+  min-height: 60px;
+  margin-bottom: 10px;
+  box-sizing: border-box;
+}
+
+.comment-textarea:focus {
+  outline: none;
+  border-color: var(--accent-color);
+  box-shadow: 0 0 0 2px rgba(100, 149, 237, 0.2);
+}
+
+.comment-textarea::placeholder {
+  color: var(--text-muted);
+}
+
+.comment-buttons {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+.comment-btn {
+  padding: 6px 14px;
+  font-size: 12px;
+  font-weight: 500;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: background-color 0.15s ease;
+}
+
+.comment-btn-cancel {
+  background-color: transparent;
+  border: 1px solid var(--border-color);
+  color: var(--text-secondary);
+}
+
+.comment-btn-cancel:hover {
+  background-color: var(--bg-hover);
+}
+
+.comment-btn-save {
+  background-color: var(--accent-color);
+  border: none;
+  color: white;
+}
+
+.comment-btn-save:hover {
+  background-color: var(--accent-hover);
+}
