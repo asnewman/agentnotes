@@ -256,6 +256,7 @@
 /* Highlight mark for commented text */
 .tiptap mark {
   background-color: var(--highlight-bg);
+  color: inherit;
   padding: 0.1em 0;
 }
 

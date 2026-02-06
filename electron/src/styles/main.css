@@ -10,12 +10,12 @@
   --bg-tertiary: #2d2d30;
   --bg-hover: #3e3e42;
   --bg-selected: #094771;
-  --text-primary: #cccccc;
-  --text-secondary: #858585;
-  --text-muted: #6e6e6e;
+  --text-primary: #ffffff;
+  --text-secondary: #ffffff;
+  --text-muted: #ffffff;
   --border-color: #3c3c3c;
   --accent-color: #0078d4;
-  --highlight-bg: #ffeb3b40;
+  --highlight-bg: #ffeb3b1a;
   --tag-bg: #3c3c3c;
   --tag-text: #9cdcfe;
   --priority-high: #f48771;
