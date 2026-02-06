@@ -5,18 +5,11 @@ A local-first CLI knowledge base storing markdown notes with YAML frontmatter.
 ## Project Structure
 
 - `cmd/agentnotes/main.go` - CLI entrypoint
-- `cmd/agentnotes-gui/main.go` - GUI entrypoint (Fyne)
 - `internal/notes/model.go` - Note struct, frontmatter parsing/marshaling
 - `internal/notes/store.go` - File-based CRUD operations
 - `internal/notes/search.go` - Search and filter logic
 - `internal/cli/commands.go` - Cobra CLI command implementations
 - `internal/cli/display.go` - Terminal formatting with ANSI colors
-- `internal/gui/app.go` - Fyne app setup and main window
-- `internal/gui/notelist.go` - Left sidebar with scrollable note list
-- `internal/gui/noteview.go` - Main panel with content and inline comments split
-- `internal/gui/commentview.go` - General comment display (non-inline comments)
-- `internal/gui/inlinecomments.go` - Right panel for inline comments (with line numbers)
-- `internal/gui/linecontent.go` - Line content utilities (legacy, unused)
 - `electron/` - Electron-based GUI application
   - `main.js` - Electron main process, window creation, IPC handlers
   - `preload.js` - Context bridge exposing APIs to renderer
@@ -46,12 +39,6 @@ go build -o agentnotes ./cmd/agentnotes
 ./agentnotes --help
 ```
 
-### GUI (Fyne)
-```bash
-go build -o agentnotes-gui ./cmd/agentnotes-gui
-./agentnotes-gui
-```
-
 ### GUI (Electron)
 ```bash
 cd electron
@@ -62,10 +49,10 @@ npm start
 The Electron app features:
 - Custom draggable title bar with macOS-style traffic light buttons (close/minimize/maximize)
 - Frameless window (`frame: false` in main.js)
-- Three-panel layout matching the Fyne GUI
+- Three-panel layout
 - SVG-based window control buttons for pixel-perfect circles
 
-Both GUIs provide a read-only view of notes with a three-panel layout:
+The GUI provides a read-only view of notes with a three-panel layout:
 - Left: Note list
 - Center: Note content with metadata (rendered as styled markdown)
 - Right: Inline comments panel showing comments with line references
