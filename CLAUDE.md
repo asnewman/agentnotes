@@ -27,6 +27,19 @@ Notes stored in `.agentnotes/notes/` (relative to current working directory) as 
 2024-01-15-slugified-title.md
 ```
 
+Notes can be organized in subdirectories:
+```
+.agentnotes/notes/
+├── projects/
+│   ├── frontend/
+│   │   └── 2024-02-01-react-components.md
+│   └── backend/
+│       └── 2024-02-01-api-endpoints.md
+├── meetings/
+│   └── 2024-02-03-standup-notes.md
+└── 2024-01-15-root-level-note.md
+```
+
 Each note has YAML frontmatter with: id (ULID), title, tags, created, updated, source, priority, comments.
 
 The CLI operates relative to the current working directory - each project can have its own independent notes.
@@ -51,9 +64,10 @@ The Electron app features:
 - Frameless window (`frame: false` in main.js)
 - Three-panel layout
 - SVG-based window control buttons for pixel-perfect circles
+- Directory hierarchy with collapsible folders in the note list
 
 The GUI provides a read-only view of notes with a three-panel layout:
-- Left: Note list
+- Left: Note list with directory tree (folders are collapsible, notes show document icons)
 - Center: Note content with metadata (rendered as styled markdown)
 - Right: Inline comments panel showing comments with line references
 

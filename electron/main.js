@@ -46,11 +46,38 @@ function getNotesDir() {
   return path.join(parentDir, '.agentnotes', 'notes');
 }
 
+// Recursively get all markdown files in a directory
+function getAllMarkdownFiles(dir, baseDir = dir) {
+  const files = [];
+
+  if (!fs.existsSync(dir)) {
+    return files;
+  }
+
+  const entries = fs.readdirSync(dir, { withFileTypes: true });
+
+  for (const entry of entries) {
+    const fullPath = path.join(dir, entry.name);
+
+    if (entry.isDirectory()) {
+      files.push(...getAllMarkdownFiles(fullPath, baseDir));
+    } else if (entry.isFile() && entry.name.endsWith('.md')) {
+      const relativePath = path.relative(baseDir, fullPath);
+      files.push({ fullPath, relativePath });
+    }
+  }
+
+  return files;
+}
+
 // Parse a note file
-function parseNoteFile(filePath) {
+function parseNoteFile(filePath, relativePath = '') {
   try {
     const content = fs.readFileSync(filePath, 'utf-8');
     const { data, content: markdownContent } = matter(content);
+
+    // Extract directory from relativePath (empty string for root-level notes)
+    const directory = relativePath ? path.dirname(relativePath) : '';
 
     return {
       id: data.id || '',
@@ -70,7 +97,9 @@ function parseNoteFile(filePath) {
         content: c.content || ''
       })),
       content: markdownContent.trim(),
-      filename: path.basename(filePath)
+      filename: path.basename(filePath),
+      relativePath: relativePath || path.basename(filePath),
+      directory: directory === '.' ? '' : directory
     };
   } catch (err) {
     console.error(`Error parsing note file ${filePath}:`, err);
@@ -87,12 +116,10 @@ ipcMain.handle('notes:list', async () => {
   }
 
   try {
-    const files = fs.readdirSync(notesDir)
-      .filter(f => f.endsWith('.md'))
-      .map(f => path.join(notesDir, f));
+    const files = getAllMarkdownFiles(notesDir);
 
     const notes = files
-      .map(parseNoteFile)
+      .map(({ fullPath, relativePath }) => parseNoteFile(fullPath, relativePath))
       .filter(n => n !== null)
       .sort((a, b) => new Date(b.created) - new Date(a.created));
 
@@ -112,12 +139,10 @@ ipcMain.handle('notes:get', async (event, noteId) => {
   }
 
   try {
-    const files = fs.readdirSync(notesDir)
-      .filter(f => f.endsWith('.md'))
-      .map(f => path.join(notesDir, f));
+    const files = getAllMarkdownFiles(notesDir);
 
-    for (const filePath of files) {
-      const note = parseNoteFile(filePath);
+    for (const { fullPath, relativePath } of files) {
+      const note = parseNoteFile(fullPath, relativePath);
       if (note && note.id === noteId) {
         return note;
       }
