@@ -8,6 +8,7 @@ import {
   getDirectory,
   listNotes,
   selectDirectory,
+  updateNote,
 } from './lib/noteStore';
 import type { CommentAnchor, Note, NotesListResponse, NotesListResult } from './types';
 
@@ -150,6 +151,31 @@ async function onCommentDelete(commentId: string): Promise<void> {
   }
 }
 
+async function onNoteSave(noteId: string, content: string): Promise<Note | null> {
+  try {
+    const result = await updateNote(noteId, content);
+
+    if (!result.success || !result.note) {
+      console.error('Failed to update note:', result.error);
+      return null;
+    }
+
+    clearCache();
+    currentNoteId = result.note.id;
+    noteView?.render(result.note);
+    commentsPanel?.render(result.note.comments);
+
+    const notes = extractNotes(await listNotes());
+    noteList?.render(notes);
+    noteList?.selectNote(result.note.id);
+
+    return result.note;
+  } catch (error) {
+    console.error('Error updating note:', error);
+    return null;
+  }
+}
+
 function updateDirectoryIndicator(path: string | null): void {
   if (!titleBarDirectory || !directoryPath) {
     return;
@@ -241,6 +267,7 @@ async function init(): Promise<void> {
   commentsPanel = new CommentsPanel(commentsListContainer);
 
   noteView.setOnCommentCreate(onCommentCreate);
+  noteView.setOnNoteSave(onNoteSave);
   commentsPanel.setOnCommentSubmit(onCommentSubmit);
   commentsPanel.setOnCommentDelete(onCommentDelete);
 

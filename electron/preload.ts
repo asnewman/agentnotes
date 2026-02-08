@@ -10,6 +10,8 @@ import type {
 const api: PreloadApi = {
   listNotes: () => ipcRenderer.invoke('notes:list') as Promise<NotesListResult>,
   getNote: (noteId: string) => ipcRenderer.invoke('notes:get', noteId) as Promise<Note | null>,
+  updateNote: (noteId: string, content: string) =>
+    ipcRenderer.invoke('notes:update', { noteId, content }) as Promise<CommentMutationResult>,
   addComment: (
     noteId: string,
     content: string,

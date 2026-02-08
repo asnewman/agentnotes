@@ -13,6 +13,7 @@ import type {
   Note,
   NoteComment,
   NotesListResult,
+  UpdateNotePayload,
 } from './src/types';
 
 interface StoreSchema {
@@ -236,6 +237,14 @@ function isDeleteCommentPayload(payload: unknown): payload is DeleteCommentPaylo
   return typeof payload.noteId === 'string' && typeof payload.commentId === 'string';
 }
 
+function isUpdateNotePayload(payload: unknown): payload is UpdateNotePayload {
+  if (!isRecord(payload)) {
+    return false;
+  }
+
+  return typeof payload.noteId === 'string' && typeof payload.content === 'string';
+}
+
 ipcMain.handle('notes:list', async (): Promise<NotesListResult> => {
   const notesDir = getNotesDir();
 
@@ -285,6 +294,52 @@ ipcMain.handle('notes:get', async (_event, noteId: string): Promise<Note | null>
     return null;
   }
 });
+
+ipcMain.handle(
+  'notes:update',
+  async (_event, payload: unknown): Promise<CommentMutationResult> => {
+    if (!isUpdateNotePayload(payload)) {
+      return { success: false, error: 'Invalid update payload' };
+    }
+
+    const notesDir = getNotesDir();
+
+    if (!notesDir || !fs.existsSync(notesDir)) {
+      return { success: false, error: 'Notes directory not found' };
+    }
+
+    try {
+      const files = getAllMarkdownFiles(notesDir);
+
+      for (const { fullPath, relativePath } of files) {
+        const fileContent = fs.readFileSync(fullPath, 'utf-8');
+        const parsedMatter = matter(fileContent);
+        const data = parsedMatter.data as FrontmatterData;
+
+        if (toStringValue(data.id) !== payload.noteId) {
+          continue;
+        }
+
+        data.updated = new Date().toISOString();
+        const updatedFile = matter.stringify(payload.content, data);
+        fs.writeFileSync(fullPath, updatedFile, 'utf-8');
+
+        return {
+          success: true,
+          note: parseNoteFile(fullPath, relativePath) ?? undefined,
+        };
+      }
+
+      return { success: false, error: 'Note not found' };
+    } catch (error) {
+      console.error('Error updating note:', error);
+      return {
+        success: false,
+        error: error instanceof Error ? error.message : 'Unknown error',
+      };
+    }
+  },
+);
 
 ipcMain.on('window:minimize', () => {
   mainWindow?.minimize();

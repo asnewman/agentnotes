@@ -35,6 +35,16 @@ export async function getNote(noteId: string): Promise<Note | null> {
   return window.api.getNote(noteId);
 }
 
+export async function updateNote(noteId: string, content: string): Promise<CommentMutationResult> {
+  const result = await window.api.updateNote(noteId, content);
+
+  if (result.success) {
+    clearCache();
+  }
+
+  return result;
+}
+
 export function clearCache(): void {
   notesCache = null;
 }

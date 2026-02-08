@@ -52,9 +52,15 @@ export interface DeleteCommentPayload {
   commentId: string;
 }
 
+export interface UpdateNotePayload {
+  noteId: string;
+  content: string;
+}
+
 export interface PreloadApi {
   listNotes: () => Promise<NotesListResult>;
   getNote: (noteId: string) => Promise<Note | null>;
+  updateNote: (noteId: string, content: string) => Promise<CommentMutationResult>;
   addComment: (
     noteId: string,
     content: string,

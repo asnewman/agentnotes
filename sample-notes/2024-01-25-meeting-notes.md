@@ -4,44 +4,12 @@ title: Weekly Planning Meeting
 tags:
   - meeting
   - planning
-created: 2024-01-25T14:00:00Z
-updated: 2024-01-25T15:30:00Z
+created: 2024-01-25T14:00:00.000Z
+updated: '2026-02-08T02:36:32.831Z'
 source: user
 priority: 1
 comments: []
 ---
 # Weekly Planning Meeting
 
-**Date:** January 25, 2024
-**Attendees:** Team
-
-## Agenda
-
-1. Review last week's progress
-2. Discuss upcoming features
-3. Address blockers
-
-## Discussion Points
-
-### Progress Review
-- CLI implementation complete
-- Basic CRUD operations working
-- Comment system added
-
-### Upcoming Work
-- GUI implementation (Fyne)
-- Search improvements
-- Export functionality
-
-### Blockers
-- None currently
-
-## Action Items
-
-- [ ] Start GUI implementation
-- [ ] Write documentation
-- [ ] Set up CI/CD pipeline
-
-## Next Meeting
-
-February 1, 2024 at 2:00 PM
+Hello**Date:** January 25, 2024**Attendees:** Team## Agenda1. Review last week's progress2. Discuss upcoming features3. Address blockers## Discussion Points### Progress Review- CLI implementation complete- Basic CRUD operations working- Comment system added### Upcoming Work- GUI implementation (Fyne)- Search improvements- Export functionality### Blockers- None currently## Action Items- [ ] Start GUI implementation- [ ] Write documentation- [ ] Set up CI/CD pipeline## Next MeetingFebruary 1, 2024 at 2:00 PM
