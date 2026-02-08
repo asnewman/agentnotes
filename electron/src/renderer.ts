@@ -9,7 +9,7 @@ import {
   listNotes,
   selectDirectory,
 } from './lib/noteStore';
-import type { Note, NotesListResponse, NotesListResult } from './types';
+import type { CommentAnchor, Note, NotesListResponse, NotesListResult } from './types';
 
 let noteList: NoteList | null = null;
 let noteView: NoteView | null = null;
@@ -91,21 +91,21 @@ function initTitleBar(): void {
 function onSelectNote(note: Note): void {
   currentNoteId = note.id;
   noteView?.render(note);
-  commentsPanel?.render(note.comments, note.content);
+  commentsPanel?.render(note.comments);
 }
 
-function onCommentCreate(startChar: number, endChar: number, selectedText: string): void {
-  commentsPanel?.startNewComment(startChar, endChar, selectedText);
+function onCommentCreate(anchor: CommentAnchor, selectedText: string): void {
+  commentsPanel?.startNewComment(anchor, selectedText);
 }
 
-async function onCommentSubmit(content: string, startChar: number, endChar: number): Promise<void> {
+async function onCommentSubmit(content: string, anchor: CommentAnchor): Promise<void> {
   if (!currentNoteId) {
     console.error('No note selected');
     return;
   }
 
   try {
-    const result = await addComment(currentNoteId, content, '', startChar, endChar);
+    const result = await addComment(currentNoteId, content, '', anchor);
 
     if (!result.success || !result.note) {
       console.error('Failed to add comment:', result.error);
@@ -114,7 +114,7 @@ async function onCommentSubmit(content: string, startChar: number, endChar: numb
 
     clearCache();
     noteView?.render(result.note);
-    commentsPanel?.render(result.note.comments, result.note.content);
+    commentsPanel?.render(result.note.comments);
 
     const notes = extractNotes(await listNotes());
     noteList?.render(notes);
@@ -140,7 +140,7 @@ async function onCommentDelete(commentId: string): Promise<void> {
 
     clearCache();
     noteView?.render(result.note);
-    commentsPanel?.render(result.note.comments, result.note.content);
+    commentsPanel?.render(result.note.comments);
 
     const notes = extractNotes(await listNotes());
     noteList?.render(notes);

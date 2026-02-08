@@ -1,40 +1,13 @@
 import { formatDateTime } from '../lib/noteStore';
-import type { NoteComment } from '../types';
+import type { CommentAnchor, NoteComment } from '../types';
 
 interface PendingComment {
-  startChar: number;
-  endChar: number;
+  anchor: CommentAnchor;
   selectedText: string;
 }
 
-type CommentSubmitHandler = (
-  content: string,
-  startChar: number,
-  endChar: number,
-) => void | Promise<void>;
+type CommentSubmitHandler = (content: string, anchor: CommentAnchor) => void | Promise<void>;
 type CommentDeleteHandler = (commentId: string) => void | Promise<void>;
-
-function getTextPreview(
-  content: string,
-  startChar: number,
-  endChar: number,
-  maxLength = 50,
-): string | null {
-  if (!content || endChar <= startChar) {
-    return null;
-  }
-
-  const text = content.substring(startChar, endChar);
-  if (!text) {
-    return null;
-  }
-
-  if (text.length > maxLength) {
-    return `${text.substring(0, maxLength - 3)}...`;
-  }
-
-  return text;
-}
 
 function parseDate(value: string): number {
   return new Date(value).getTime();
@@ -43,7 +16,6 @@ function parseDate(value: string): number {
 export class CommentsPanel {
   private container: HTMLElement;
   private comments: NoteComment[];
-  private noteContent: string;
   private pendingComment: PendingComment | null;
   private onCommentSubmitCallback: CommentSubmitHandler | null;
   private onCommentDeleteCallback: CommentDeleteHandler | null;
@@ -52,7 +24,6 @@ export class CommentsPanel {
   constructor(container: HTMLElement) {
     this.container = container;
     this.comments = [];
-    this.noteContent = '';
     this.pendingComment = null;
     this.onCommentSubmitCallback = null;
     this.onCommentDeleteCallback = null;
@@ -67,10 +38,9 @@ export class CommentsPanel {
     this.onCommentDeleteCallback = callback;
   }
 
-  startNewComment(startChar: number, endChar: number, selectedText: string): void {
+  startNewComment(anchor: CommentAnchor, selectedText: string): void {
     this.pendingComment = {
-      startChar,
-      endChar,
+      anchor,
       selectedText:
         selectedText.length > 50 ? `${selectedText.substring(0, 47)}...` : selectedText,
     };
@@ -80,7 +50,7 @@ export class CommentsPanel {
 
   private cancelPendingComment(): void {
     this.pendingComment = null;
-    this.render(this.comments, this.noteContent);
+    this.render(this.comments);
   }
 
   private submitPendingComment(content: string): void {
@@ -89,11 +59,7 @@ export class CommentsPanel {
     }
 
     if (this.onCommentSubmitCallback) {
-      this.onCommentSubmitCallback(
-        content.trim(),
-        this.pendingComment.startChar,
-        this.pendingComment.endChar,
-      );
+      this.onCommentSubmitCallback(content.trim(), this.pendingComment.anchor);
     }
 
     this.pendingComment = null;
@@ -113,7 +79,7 @@ export class CommentsPanel {
     if (this.pendingComment) {
       this.renderWithPending();
     } else {
-      this.render(this.comments, this.noteContent);
+      this.render(this.comments);
     }
 
     try {
@@ -123,7 +89,7 @@ export class CommentsPanel {
       if (this.pendingComment) {
         this.renderWithPending();
       } else {
-        this.render(this.comments, this.noteContent);
+        this.render(this.comments);
       }
     }
   }
@@ -163,24 +129,12 @@ export class CommentsPanel {
     header.append(author, actions);
     card.appendChild(header);
 
-    if (comment.line > 0) {
-      const lineBadge = document.createElement('div');
-      lineBadge.className = 'comment-line';
-      lineBadge.textContent = `Line ${comment.line}`;
-      card.appendChild(lineBadge);
-    } else if (comment.endChar > comment.startChar) {
-      const rangeBadge = document.createElement('div');
-      rangeBadge.className = 'comment-line';
-      rangeBadge.textContent = `Chars ${comment.startChar}-${comment.endChar}`;
-      card.appendChild(rangeBadge);
-
-      const previewText = getTextPreview(this.noteContent, comment.startChar, comment.endChar);
-      if (previewText) {
-        const preview = document.createElement('div');
-        preview.className = 'comment-preview';
-        preview.textContent = `"${previewText}"`;
-        card.appendChild(preview);
-      }
+    const previewText = comment.anchor.exact;
+    if (previewText) {
+      const preview = document.createElement('div');
+      preview.className = 'comment-preview';
+      preview.textContent = `"${previewText.length > 80 ? `${previewText.substring(0, 77)}...` : previewText}"`;
+      card.appendChild(preview);
     }
 
     const content = document.createElement('div');
@@ -209,11 +163,11 @@ export class CommentsPanel {
     title.className = 'comment-author';
     title.textContent = 'New Comment';
 
-    const rangeBadge = document.createElement('span');
-    rangeBadge.className = 'comment-line-badge';
-    rangeBadge.textContent = `Chars ${pendingComment.startChar}-${pendingComment.endChar}`;
+    const anchorBadge = document.createElement('span');
+    anchorBadge.className = 'comment-line-badge';
+    anchorBadge.textContent = 'Anchored text';
 
-    header.append(title, rangeBadge);
+    header.append(title, anchorBadge);
     card.appendChild(header);
 
     const preview = document.createElement('div');
@@ -275,18 +229,6 @@ export class CommentsPanel {
     }
 
     const sortedComments = [...this.comments].sort((a, b) => {
-      if (a.line > 0 && b.line > 0) {
-        return a.line - b.line;
-      }
-
-      if (a.line > 0 && b.line <= 0) {
-        return -1;
-      }
-
-      if (a.line <= 0 && b.line > 0) {
-        return 1;
-      }
-
       return parseDate(a.created) - parseDate(b.created);
     });
 
@@ -295,9 +237,8 @@ export class CommentsPanel {
     }
   }
 
-  render(comments: NoteComment[] = [], noteContent = ''): void {
+  render(comments: NoteComment[] = []): void {
     this.comments = comments;
-    this.noteContent = noteContent;
     this.container.innerHTML = '';
 
     if (this.comments.length === 0) {
@@ -309,18 +250,6 @@ export class CommentsPanel {
     }
 
     const sortedComments = [...this.comments].sort((a, b) => {
-      if (a.line > 0 && b.line > 0) {
-        return a.line - b.line;
-      }
-
-      if (a.line > 0 && b.line <= 0) {
-        return -1;
-      }
-
-      if (a.line <= 0 && b.line > 0) {
-        return 1;
-      }
-
       return parseDate(a.created) - parseDate(b.created);
     });
 

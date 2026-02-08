@@ -1,5 +1,11 @@
 import { contextBridge, ipcRenderer } from 'electron';
-import type { CommentMutationResult, Note, NotesListResult, PreloadApi } from './src/types';
+import type {
+  CommentAnchor,
+  CommentMutationResult,
+  Note,
+  NotesListResult,
+  PreloadApi,
+} from './src/types';
 
 const api: PreloadApi = {
   listNotes: () => ipcRenderer.invoke('notes:list') as Promise<NotesListResult>,
@@ -8,15 +14,13 @@ const api: PreloadApi = {
     noteId: string,
     content: string,
     author: string,
-    startChar: number,
-    endChar: number,
+    anchor: CommentAnchor,
   ) =>
     ipcRenderer.invoke('notes:addComment', {
       noteId,
       content,
       author,
-      startChar,
-      endChar,
+      anchor,
     }) as Promise<CommentMutationResult>,
   deleteComment: (noteId: string, commentId: string) =>
     ipcRenderer.invoke('notes:deleteComment', { noteId, commentId }) as Promise<CommentMutationResult>,

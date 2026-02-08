@@ -199,9 +199,6 @@ func FormatCommentList(comments []notes.Comment) string {
 		if c.Author != "" {
 			sb.WriteString(Dim + " by " + Reset + Magenta + c.Author + Reset)
 		}
-		if c.Line > 0 {
-			sb.WriteString(Dim + fmt.Sprintf(" (line %d)", c.Line) + Reset)
-		}
 		sb.WriteString("\n")
 
 		// Date
@@ -210,6 +207,11 @@ func FormatCommentList(comments []notes.Comment) string {
 
 		// Content
 		sb.WriteString("  " + c.Content + "\n")
+		anchorPreview := c.Anchor.Exact
+		if len(anchorPreview) > 60 {
+			anchorPreview = anchorPreview[:57] + "..."
+		}
+		sb.WriteString(Dim + "  ↳ " + "\"" + anchorPreview + "\"" + Reset + "\n")
 	}
 
 	return sb.String()
@@ -221,54 +223,26 @@ func FormatCommentsInline(content string, comments []notes.Comment) string {
 		return content
 	}
 
-	// Build a map of line numbers to comments
-	lineComments := make(map[int][]notes.Comment)
-	var generalComments []notes.Comment
-
-	for _, c := range comments {
-		if c.Line > 0 {
-			lineComments[c.Line] = append(lineComments[c.Line], c)
-		} else {
-			generalComments = append(generalComments, c)
-		}
-	}
-
-	lines := strings.Split(content, "\n")
 	var sb strings.Builder
 
-	// Add each line with any inline comments
-	for i, line := range lines {
-		lineNum := i + 1
-		sb.WriteString(line)
+	sb.WriteString(content)
+	sb.WriteString("\n")
+	sb.WriteString("\n" + Bold + "─────────────────────────────────────────────\n" + Reset)
+	sb.WriteString(Bold + "Comments:\n" + Reset)
+	for _, c := range comments {
+		sb.WriteString(Yellow + "• " + Reset)
+		if c.Author != "" {
+			sb.WriteString(Magenta + c.Author + Reset + ": ")
+		}
+		sb.WriteString(c.Content)
+		sb.WriteString(Dim + " [" + c.ID[:8] + "]" + Reset)
 		sb.WriteString("\n")
-
-		// Check for comments on this line
-		if commentsOnLine, ok := lineComments[lineNum]; ok {
-			for _, c := range commentsOnLine {
-				sb.WriteString(Yellow + "  ┃ " + Reset)
-				if c.Author != "" {
-					sb.WriteString(Magenta + c.Author + Reset + ": ")
-				}
-				sb.WriteString(Dim + c.Content + Reset)
-				sb.WriteString(Dim + " [" + c.ID[:8] + "]" + Reset)
-				sb.WriteString("\n")
-			}
+		anchorPreview := c.Anchor.Exact
+		if len(anchorPreview) > 60 {
+			anchorPreview = anchorPreview[:57] + "..."
 		}
-	}
-
-	// Add general comments at the end
-	if len(generalComments) > 0 {
-		sb.WriteString("\n" + Bold + "─────────────────────────────────────────────\n" + Reset)
-		sb.WriteString(Bold + "Comments:\n" + Reset)
-		for _, c := range generalComments {
-			sb.WriteString(Yellow + "• " + Reset)
-			if c.Author != "" {
-				sb.WriteString(Magenta + c.Author + Reset + ": ")
-			}
-			sb.WriteString(c.Content)
-			sb.WriteString(Dim + " [" + c.ID[:8] + "]" + Reset)
-			sb.WriteString("\n")
-		}
+		sb.WriteString(Dim + "  ↳ " + "\"" + anchorPreview + "\"" + Reset)
+		sb.WriteString("\n")
 	}
 
 	return strings.TrimRight(sb.String(), "\n")

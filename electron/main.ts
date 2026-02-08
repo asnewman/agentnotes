@@ -7,6 +7,7 @@ import Store from 'electron-store';
 import { ulid } from 'ulid';
 import type {
   AddCommentPayload,
+  CommentAnchor,
   CommentMutationResult,
   DeleteCommentPayload,
   Note,
@@ -109,27 +110,43 @@ function toStringArray(value: unknown): string[] {
   return value.filter((entry): entry is string => typeof entry === 'string');
 }
 
+function parseCommentAnchor(anchor: unknown): CommentAnchor {
+  if (!isRecord(anchor)) {
+    return {
+      exact: '',
+      prefix: '',
+      suffix: '',
+    };
+  }
+
+  return {
+    exact: toStringValue(anchor.exact),
+    prefix: toStringValue(anchor.prefix),
+    suffix: toStringValue(anchor.suffix),
+  };
+}
+
 function parseCommentEntry(comment: unknown, fallbackIso: string): NoteComment {
   if (!isRecord(comment)) {
     return {
       id: '',
       author: '',
-      line: 0,
-      startChar: 0,
-      endChar: 0,
       created: fallbackIso,
       content: '',
+      anchor: {
+        exact: '',
+        prefix: '',
+        suffix: '',
+      },
     };
   }
 
   return {
     id: toStringValue(comment.id),
     author: toStringValue(comment.author),
-    line: toNumberValue(comment.line),
-    startChar: toNumberValue(comment.start_char),
-    endChar: toNumberValue(comment.end_char),
     created: toIsoDate(comment.created, fallbackIso),
     content: toStringValue(comment.content),
+    anchor: parseCommentAnchor(comment.anchor),
   };
 }
 
@@ -197,12 +214,17 @@ function isAddCommentPayload(payload: unknown): payload is AddCommentPayload {
     return false;
   }
 
+  if (!isRecord(payload.anchor)) {
+    return false;
+  }
+
   return (
     typeof payload.noteId === 'string' &&
     typeof payload.content === 'string' &&
     typeof payload.author === 'string' &&
-    typeof payload.startChar === 'number' &&
-    typeof payload.endChar === 'number'
+    typeof payload.anchor.exact === 'string' &&
+    typeof payload.anchor.prefix === 'string' &&
+    typeof payload.anchor.suffix === 'string'
   );
 }
 
@@ -333,10 +355,13 @@ ipcMain.handle(
         const newComment = {
           id: ulid(),
           author: payload.author,
-          start_char: payload.startChar,
-          end_char: payload.endChar,
           created: new Date().toISOString(),
           content: payload.content,
+          anchor: {
+            exact: payload.anchor.exact,
+            prefix: payload.anchor.prefix,
+            suffix: payload.anchor.suffix,
+          },
         };
 
         const comments = Array.isArray(data.comments) ? [...data.comments] : [];

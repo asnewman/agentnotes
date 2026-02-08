@@ -13,26 +13,29 @@ import (
 )
 
 // Comment represents a comment on a note
+type CommentAnchor struct {
+	Exact  string `yaml:"exact"`
+	Prefix string `yaml:"prefix"`
+	Suffix string `yaml:"suffix"`
+}
+
 type Comment struct {
-	ID      string    `yaml:"id"`
-	Author  string    `yaml:"author,omitempty"`
-	Line    int       `yaml:"line,omitempty"` // Optional: reference a specific line
-	Created time.Time `yaml:"created"`
-	Content string    `yaml:"content"`
+	ID      string        `yaml:"id"`
+	Author  string        `yaml:"author"`
+	Created time.Time     `yaml:"created"`
+	Content string        `yaml:"content"`
+	Anchor  CommentAnchor `yaml:"anchor"`
 }
 
 // NewComment creates a new comment with generated ID and timestamp
-func NewComment(author, content string, line int) *Comment {
-	c := &Comment{
+func NewComment(author, content string, anchor CommentAnchor) *Comment {
+	return &Comment{
 		ID:      ulid.Make().String(),
 		Author:  author,
 		Created: time.Now().UTC(),
 		Content: content,
+		Anchor:  anchor,
 	}
-	if line > 0 {
-		c.Line = line
-	}
-	return c
 }
 
 // Note represents a markdown note with metadata

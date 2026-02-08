@@ -88,7 +88,12 @@ Users can create comments by highlighting text in the note view:
 3. Click the button to open a pending comment card in the comments panel
 4. Type the comment and press Enter to save (Escape to cancel, Shift+Enter for newlines)
 
-Comments are stored with character positions (`start_char`/`end_char`) and the highlighted text gets a yellow background. The comments panel shows a preview of the highlighted text for each comment.
+Comments are stored with required text anchors:
+- `anchor.exact` - exact selected text
+- `anchor.prefix` - surrounding text before the selection
+- `anchor.suffix` - surrounding text after the selection
+
+Highlights are resolved from anchors at render time. If an anchor is ambiguous or missing after edits, the comment remains visible in the panel but is not highlighted.
 
 ### Deleting Comments in GUI
 Users can delete existing comments from the comments panel:
@@ -137,8 +142,8 @@ The `comment` command manages comments on notes. Comments are stored in the note
 ```bash
 ./agentnotes comment add "My Note" "This is a comment"
 ./agentnotes comment add "My Note" --author=claude "AI comment"
-./agentnotes comment add "My Note" "Comment on line 5" --line=5
-echo "comment" | ./agentnotes comment add "My Note"
+./agentnotes comment add "My Note" "Comment on selected text" --exact="selected text"
+echo "comment" | ./agentnotes comment add "My Note" --exact="selected text"
 ```
 
 ### List comments

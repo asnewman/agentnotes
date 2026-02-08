@@ -541,7 +541,7 @@ func (app *App) commentCmd() *cobra.Command {
 // commentAddCmd creates the comment add subcommand
 func (app *App) commentAddCmd() *cobra.Command {
 	var author string
-	var line int
+	var exact string
 
 	cmd := &cobra.Command{
 		Use:   "add <note> [comment]",
@@ -551,8 +551,8 @@ func (app *App) commentAddCmd() *cobra.Command {
 Examples:
   agentnotes comment add "My Note" "This is a comment"
   agentnotes comment add "My Note" --author=claude "AI comment"
-  agentnotes comment add "My Note" "Comment on line 5" --line=5
-  echo "comment" | agentnotes comment add "My Note"`,
+  agentnotes comment add "My Note" "Comment on selected text" --exact "selected text"
+  echo "comment" | agentnotes comment add "My Note" --exact "selected text"`,
 		Args: cobra.RangeArgs(1, 2),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			noteID := args[0]
@@ -585,22 +585,29 @@ Examples:
 				return fmt.Errorf("comment cannot be empty")
 			}
 
-			note, comment, err := app.Store.AddComment(noteID, content, author, line)
+			note, err := app.Store.Get(noteID)
 			if err != nil {
 				return err
 			}
 
-			if line > 0 {
-				fmt.Println(Success(fmt.Sprintf("Added comment [%s] to '%s' at line %d", comment.ID[:8], note.Title, line)))
-			} else {
-				fmt.Println(Success(fmt.Sprintf("Added comment [%s] to '%s'", comment.ID[:8], note.Title)))
+			anchor, err := notes.BuildAnchor(note.Content, exact)
+			if err != nil {
+				return err
 			}
+
+			note, comment, err := app.Store.AddComment(note.ID, content, author, anchor)
+			if err != nil {
+				return err
+			}
+
+			fmt.Println(Success(fmt.Sprintf("Added comment [%s] to '%s'", comment.ID[:8], note.Title)))
 			return nil
 		},
 	}
 
 	cmd.Flags().StringVar(&author, "author", "", "Comment author (e.g., 'user', 'claude')")
-	cmd.Flags().IntVar(&line, "line", 0, "Line number this comment refers to")
+	cmd.Flags().StringVar(&exact, "exact", "", "Exact selected text to anchor comment to")
+	_ = cmd.MarkFlagRequired("exact")
 
 	return cmd
 }

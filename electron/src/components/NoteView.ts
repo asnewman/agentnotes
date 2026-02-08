@@ -4,16 +4,17 @@ import StarterKit from '@tiptap/starter-kit';
 import { getAllHighlightRanges } from '../lib/highlighter';
 import { formatDate } from '../lib/noteStore';
 import { findTextInContent, getTextFromEditor } from '../lib/positionMapper';
-import type { Note } from '../types';
+import type { CommentAnchor, Note } from '../types';
 import { createPriorityBadge, createTagChip } from './TagChip';
 
 interface CurrentSelection {
-  startChar: number;
-  endChar: number;
+  anchor: CommentAnchor;
   text: string;
 }
 
-type CommentCreateHandler = (startChar: number, endChar: number, selectedText: string) => void;
+type CommentCreateHandler = (anchor: CommentAnchor, selectedText: string) => void;
+
+const anchorContextChars = 64;
 
 export class NoteView {
   private headerContainer: HTMLElement;
@@ -96,9 +97,8 @@ export class NoteView {
     }
 
     this.currentSelection = {
-      startChar: positions.startChar,
-      endChar: positions.endChar,
-      text: selectedText,
+      anchor: this.buildAnchor(this.currentNote.content, positions.startChar, positions.endChar),
+      text: selectedText.trim(),
     };
 
     this.showSelectionTooltip();
@@ -157,11 +157,7 @@ export class NoteView {
 
   private handleCommentClick(): void {
     if (this.currentSelection && this.onCommentCreateCallback) {
-      this.onCommentCreateCallback(
-        this.currentSelection.startChar,
-        this.currentSelection.endChar,
-        this.currentSelection.text,
-      );
+      this.onCommentCreateCallback(this.currentSelection.anchor, this.currentSelection.text);
     }
 
     this.hideSelectionTooltip();
@@ -252,6 +248,17 @@ export class NoteView {
       .replace(/\n/g, '<br>');
 
     return `<p>${escaped}</p>`;
+  }
+
+  private buildAnchor(content: string, startChar: number, endChar: number): CommentAnchor {
+    const prefixStart = Math.max(0, startChar - anchorContextChars);
+    const suffixEnd = Math.min(content.length, endChar + anchorContextChars);
+
+    return {
+      exact: content.slice(startChar, endChar),
+      prefix: content.slice(prefixStart, startChar),
+      suffix: content.slice(endChar, suffixEnd),
+    };
   }
 
   private applyHighlights(note: Note): void {

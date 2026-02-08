@@ -1,11 +1,15 @@
+export interface CommentAnchor {
+  exact: string;
+  prefix: string;
+  suffix: string;
+}
+
 export interface NoteComment {
   id: string;
   author: string;
-  line: number;
-  startChar: number;
-  endChar: number;
   created: string;
   content: string;
+  anchor: CommentAnchor;
 }
 
 export interface Note {
@@ -40,8 +44,7 @@ export interface AddCommentPayload {
   noteId: string;
   content: string;
   author: string;
-  startChar: number;
-  endChar: number;
+  anchor: CommentAnchor;
 }
 
 export interface DeleteCommentPayload {
@@ -56,8 +59,7 @@ export interface PreloadApi {
     noteId: string,
     content: string,
     author: string,
-    startChar: number,
-    endChar: number,
+    anchor: CommentAnchor,
   ) => Promise<CommentMutationResult>;
   deleteComment: (noteId: string, commentId: string) => Promise<CommentMutationResult>;
   getDirectory: () => Promise<string | null>;

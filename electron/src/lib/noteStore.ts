@@ -1,4 +1,5 @@
 import type {
+  CommentAnchor,
   CommentMutationResult,
   Note,
   NotesListResponse,
@@ -42,10 +43,9 @@ export async function addComment(
   noteId: string,
   content: string,
   author: string,
-  startChar: number,
-  endChar: number,
+  anchor: CommentAnchor,
 ): Promise<CommentMutationResult> {
-  const result = await window.api.addComment(noteId, content, author, startChar, endChar);
+  const result = await window.api.addComment(noteId, content, author, anchor);
 
   if (result.success) {
     clearCache();

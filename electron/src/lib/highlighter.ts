@@ -5,74 +5,67 @@ export interface CharRange {
   to: number;
 }
 
-export function linesToCharRanges(content: string, lines: number[]): CharRange[] {
-  if (!lines || lines.length === 0) {
-    return [];
+function getAllExactMatches(content: string, exact: string): number[] {
+  const matches: number[] = [];
+  if (!content || !exact) {
+    return matches;
   }
 
-  const contentLines = content.split('\n');
-  const ranges: CharRange[] = [];
-
-  const lineOffsets = [0];
   let offset = 0;
-
-  for (const line of contentLines) {
-    offset += line.length + 1;
-    lineOffsets.push(offset);
-  }
-
-  for (const lineNum of lines) {
-    const lineIndex = lineNum - 1;
-
-    if (lineIndex < 0 || lineIndex >= contentLines.length) {
-      continue;
+  while (offset <= content.length - exact.length) {
+    const index = content.indexOf(exact, offset);
+    if (index < 0) {
+      break;
     }
 
-    const from = lineOffsets[lineIndex] ?? 0;
-    const to = from + contentLines[lineIndex].length;
-
-    if (from < to) {
-      ranges.push({ from, to });
-    }
+    matches.push(index);
+    offset = index + 1;
   }
 
-  return ranges;
+  return matches;
 }
 
-export function getCommentedLines(comments: NoteComment[]): number[] {
-  if (!comments || comments.length === 0) {
-    return [];
+function matchesPrefix(content: string, index: number, prefix: string): boolean {
+  if (prefix.length > index) {
+    return false;
   }
 
-  const lines = new Set<number>();
-
-  for (const comment of comments) {
-    if (comment.line > 0) {
-      lines.add(comment.line);
-    }
-  }
-
-  return Array.from(lines).sort((a, b) => a - b);
+  return content.slice(index - prefix.length, index) === prefix;
 }
 
-export function getCommentCharRanges(comments: NoteComment[]): CharRange[] {
-  if (!comments || comments.length === 0) {
-    return [];
+function matchesSuffix(content: string, end: number, suffix: string): boolean {
+  if (end + suffix.length > content.length) {
+    return false;
   }
 
-  const ranges: CharRange[] = [];
+  return content.slice(end, end + suffix.length) === suffix;
+}
 
-  for (const comment of comments) {
-    if (comment.endChar > comment.startChar) {
-      ranges.push({
-        from: comment.startChar,
-        to: comment.endChar,
-      });
-    }
+export function resolveCommentRange(content: string, comment: NoteComment): CharRange | null {
+  const exact = comment.anchor.exact;
+  const prefix = comment.anchor.prefix;
+  const suffix = comment.anchor.suffix;
+
+  if (!exact) {
+    return null;
   }
 
-  ranges.sort((a, b) => a.from - b.from);
-  return ranges;
+  const matches = getAllExactMatches(content, exact);
+  if (matches.length === 0) {
+    return null;
+  }
+
+  const resolved = matches.filter((start) => {
+    const end = start + exact.length;
+    return matchesPrefix(content, start, prefix) && matchesSuffix(content, end, suffix);
+  });
+
+  if (resolved.length !== 1) {
+    return null;
+  }
+
+  const from = resolved[0];
+  return { from, to: from + exact.length };
 }
 
 export function getAllHighlightRanges(content: string, comments: NoteComment[]): CharRange[] {
@@ -81,8 +74,12 @@ export function getAllHighlightRanges(content: string, comments: NoteComment[]):
   }
 
   const ranges: CharRange[] = [];
-  ranges.push(...getCommentCharRanges(comments));
-  ranges.push(...linesToCharRanges(content, getCommentedLines(comments)));
+  for (const comment of comments) {
+    const range = resolveCommentRange(content, comment);
+    if (range) {
+      ranges.push(range);
+    }
+  }
 
   ranges.sort((a, b) => a.from - b.from);
   return mergeRanges(ranges);
@@ -107,13 +104,4 @@ function mergeRanges(ranges: CharRange[]): CharRange[] {
   }
 
   return merged;
-}
-
-export function getHighlightConfig(): { multicolor: boolean; HTMLAttributes: { class: string } } {
-  return {
-    multicolor: false,
-    HTMLAttributes: {
-      class: 'highlighted-text',
-    },
-  };
 }
