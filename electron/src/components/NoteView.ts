@@ -6,6 +6,10 @@ import { formatDate, formatDateTime } from '../lib/noteStore';
 import type { CommentAnchor, Note } from '../types';
 import { createTagChip } from './TagChip';
 
+const CommentHighlight = Highlight.extend({
+  inclusive: false,
+});
+
 interface CurrentSelection {
   anchor: CommentAnchor;
   text: string;
@@ -90,7 +94,7 @@ export class NoteView {
       element: editorElement,
       extensions: [
         StarterKit,
-        Highlight.configure({
+        CommentHighlight.configure({
           multicolor: false,
           HTMLAttributes: {
             class: 'highlighted-comment',
