@@ -11,9 +11,13 @@ A local-first CLI knowledge base storing markdown notes with YAML frontmatter.
 - `internal/cli/commands.go` - Cobra CLI command implementations
 - `internal/cli/display.go` - Terminal formatting with ANSI colors
 - `electron/` - Electron-based GUI application
-  - `main.js` - Electron main process, window creation, IPC handlers
-  - `preload.js` - Context bridge exposing APIs to renderer
-  - `src/renderer.js` - Renderer entry point, component initialization
+  - `main.ts` - Electron main process, window creation, IPC handlers
+  - `preload.ts` - Context bridge exposing APIs to renderer
+  - `src/renderer.ts` - Renderer entry point, component initialization
+  - `src/types.ts` - Shared TypeScript interfaces for notes/comments/IPC payloads
+  - `tsconfig.main.json` - TypeScript config for main/preload process build
+  - `tsconfig.renderer.json` - TypeScript config for renderer type checking
+  - `eslint.config.mjs` - ESLint config including strict TypeScript rules
   - `src/index.html` - Main HTML with custom title bar
   - `src/styles/main.css` - Core styles including title bar
   - `src/styles/components.css` - Component-specific styles
@@ -56,15 +60,21 @@ go build -o agentnotes ./cmd/agentnotes
 ```bash
 cd electron
 npm install
+npm run typecheck
+npm run lint
 npm start
 ```
 
 The Electron app features:
 - Custom draggable title bar with macOS-style traffic light buttons (close/minimize/maximize)
-- Frameless window (`frame: false` in main.js)
+- Frameless window (`frame: false` in main process config)
 - Three-panel layout
 - SVG-based window control buttons for pixel-perfect circles
 - Directory hierarchy with collapsible folders in the note list
+
+Electron development checks:
+- `npm run typecheck` validates TypeScript in main, preload, and renderer code
+- `npm run lint` runs ESLint with `@typescript-eslint/no-explicit-any` set to `error`
 
 The GUI provides a three-panel layout:
 - Left: Note list with directory tree (folders are collapsible, notes show document icons)
