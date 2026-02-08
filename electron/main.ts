@@ -16,6 +16,7 @@ import type {
   Note,
   NoteComment,
   NotesListResult,
+  UpdateNoteMetadataPayload,
   UpdateNotePayload,
 } from './src/types';
 
@@ -121,6 +122,69 @@ function toStringArray(value: unknown): string[] {
   }
 
   return value.filter((entry): entry is string => typeof entry === 'string');
+}
+
+function normalizeTags(tags: string[]): string[] {
+  const seen = new Set<string>();
+  const normalized: string[] = [];
+
+  for (const rawTag of tags) {
+    const tag = rawTag.trim();
+    if (!tag) {
+      continue;
+    }
+
+    const key = tag.toLocaleLowerCase();
+    if (seen.has(key)) {
+      continue;
+    }
+
+    seen.add(key);
+    normalized.push(tag);
+  }
+
+  return normalized;
+}
+
+function getFileTimestampIso(filePath: string): string {
+  try {
+    const stats = fs.statSync(filePath);
+    const timestamps = [stats.birthtimeMs, stats.ctimeMs, stats.mtimeMs].filter(
+      (value) => Number.isFinite(value) && value > 0,
+    );
+
+    if (timestamps.length > 0) {
+      return new Date(timestamps[0]).toISOString();
+    }
+  } catch {
+    // Use epoch fallback if metadata is unavailable.
+  }
+
+  return new Date(0).toISOString();
+}
+
+function createdTimestamp(note: Note): number {
+  const timestamp = Date.parse(note.created);
+  return Number.isNaN(timestamp) ? 0 : timestamp;
+}
+
+function compareNotesByCreated(a: Note, b: Note): number {
+  const createdDiff = createdTimestamp(b) - createdTimestamp(a);
+  if (createdDiff !== 0) {
+    return createdDiff;
+  }
+
+  const pathDiff = a.relativePath.localeCompare(b.relativePath);
+  if (pathDiff !== 0) {
+    return pathDiff;
+  }
+
+  const titleDiff = a.title.localeCompare(b.title);
+  if (titleDiff !== 0) {
+    return titleDiff;
+  }
+
+  return a.id.localeCompare(b.id);
 }
 
 function normalizeContent(content: string): string {
@@ -319,7 +383,7 @@ function parseNoteFile(filePath: string, relativePath = ''): Note | null {
     const fileContent = fs.readFileSync(filePath, 'utf-8');
     const parsedMatter = matter(fileContent);
     const data = parsedMatter.data as FrontmatterData;
-    const nowIso = new Date().toISOString();
+    const fallbackIso = getFileTimestampIso(filePath);
     const content = normalizeContent(parsedMatter.content);
     const directory = relativePath ? path.dirname(relativePath) : '';
 
@@ -332,8 +396,8 @@ function parseNoteFile(filePath: string, relativePath = ''): Note | null {
       id: toStringValue(data.id),
       title: toStringValue(data.title, 'Untitled'),
       tags: toStringArray(data.tags),
-      created: toIsoDate(data.created, nowIso),
-      updated: toIsoDate(data.updated, nowIso),
+      created: toIsoDate(data.created, fallbackIso),
+      updated: toIsoDate(data.updated, fallbackIso),
       source: toStringValue(data.source),
       priority: toNumberValue(data.priority),
       commentRev,
@@ -409,6 +473,18 @@ function isUpdateNotePayload(payload: unknown): payload is UpdateNotePayload {
   return typeof payload.noteId === 'string' && typeof payload.content === 'string';
 }
 
+function isUpdateNoteMetadataPayload(payload: unknown): payload is UpdateNoteMetadataPayload {
+  if (!isRecord(payload) || !Array.isArray(payload.tags)) {
+    return false;
+  }
+
+  return (
+    typeof payload.noteId === 'string' &&
+    typeof payload.title === 'string' &&
+    payload.tags.every((tag) => typeof tag === 'string')
+  );
+}
+
 ipcMain.handle('notes:list', async (): Promise<NotesListResult> => {
   const notesDir = getNotesDir();
 
@@ -426,7 +502,7 @@ ipcMain.handle('notes:list', async (): Promise<NotesListResult> => {
     const notes = files
       .map(({ fullPath, relativePath }) => parseNoteFile(fullPath, relativePath))
       .filter((note): note is Note => note !== null)
-      .sort((a, b) => new Date(b.created).getTime() - new Date(a.created).getTime());
+      .sort(compareNotesByCreated);
 
     return { notes, noDirectory: false };
   } catch (error) {
@@ -524,6 +600,62 @@ ipcMain.handle(
       return { success: false, error: 'Note not found' };
     } catch (error) {
       console.error('Error updating note:', error);
+      return {
+        success: false,
+        error: error instanceof Error ? error.message : 'Unknown error',
+      };
+    }
+  },
+);
+
+ipcMain.handle(
+  'notes:updateMetadata',
+  async (_event, payload: unknown): Promise<CommentMutationResult> => {
+    if (!isUpdateNoteMetadataPayload(payload)) {
+      return { success: false, error: 'Invalid metadata payload' };
+    }
+
+    const notesDir = getNotesDir();
+
+    if (!notesDir || !fs.existsSync(notesDir)) {
+      return { success: false, error: 'Notes directory not found' };
+    }
+
+    const normalizedTitle = payload.title.trim();
+    if (!normalizedTitle) {
+      return { success: false, error: 'Title cannot be empty' };
+    }
+
+    const normalizedTags = normalizeTags(payload.tags);
+
+    try {
+      const files = getAllMarkdownFiles(notesDir);
+
+      for (const { fullPath, relativePath } of files) {
+        const fileContent = fs.readFileSync(fullPath, 'utf-8');
+        const parsedMatter = matter(fileContent);
+        const data = parsedMatter.data as FrontmatterData;
+
+        if (toStringValue(data.id) !== payload.noteId) {
+          continue;
+        }
+
+        data.title = normalizedTitle;
+        data.tags = normalizedTags;
+        data.updated = new Date().toISOString();
+
+        const updatedFile = matter.stringify(parsedMatter.content, data);
+        fs.writeFileSync(fullPath, updatedFile, 'utf-8');
+
+        return {
+          success: true,
+          note: parseNoteFile(fullPath, relativePath) ?? undefined,
+        };
+      }
+
+      return { success: false, error: 'Note not found' };
+    } catch (error) {
+      console.error('Error updating note metadata:', error);
       return {
         success: false,
         error: error instanceof Error ? error.message : 'Unknown error',

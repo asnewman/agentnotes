@@ -2,7 +2,7 @@ import { Editor } from '@tiptap/core';
 import Highlight from '@tiptap/extension-highlight';
 import StarterKit from '@tiptap/starter-kit';
 import { buildAnchorFromRange, getAllHighlightRanges } from '../lib/highlighter';
-import { formatDate } from '../lib/noteStore';
+import { formatDate, formatDateTime } from '../lib/noteStore';
 import type { CommentAnchor, Note } from '../types';
 import { createPriorityBadge, createTagChip } from './TagChip';
 
@@ -11,8 +11,15 @@ interface CurrentSelection {
   text: string;
 }
 
+interface MetadataUpdate {
+  title: string;
+  tags: string[];
+}
+
 type CommentCreateHandler = (anchor: CommentAnchor, selectedText: string) => void;
 type NoteSaveHandler = (noteId: string, content: string) => Promise<Note | null>;
+type NoteMetadataSaveHandler = (noteId: string, title: string, tags: string[]) => Promise<Note | null>;
+
 interface SaveEditsOptions {
   keepEditing?: boolean;
 }
@@ -23,12 +30,16 @@ export class NoteView {
   private editor: Editor | null;
   private currentNote: Note | null;
   private tooltip: HTMLDivElement | null;
+  private lastSavedOverlay: HTMLDivElement | null;
   private onCommentCreateCallback: CommentCreateHandler | null;
   private onNoteSaveCallback: NoteSaveHandler | null;
+  private onNoteMetadataSaveCallback: NoteMetadataSaveHandler | null;
   private currentSelection: CurrentSelection | null;
   private isSaving: boolean;
+  private isSavingMetadata: boolean;
   private autosaveTimer: number | null;
   private pendingAutosave: boolean;
+  private pendingMetadataUpdate: MetadataUpdate | null;
   private lastSavedContent: string;
   private isApplyingContent: boolean;
 
@@ -38,12 +49,16 @@ export class NoteView {
     this.editor = null;
     this.currentNote = null;
     this.tooltip = null;
+    this.lastSavedOverlay = null;
     this.onCommentCreateCallback = null;
     this.onNoteSaveCallback = null;
+    this.onNoteMetadataSaveCallback = null;
     this.currentSelection = null;
     this.isSaving = false;
+    this.isSavingMetadata = false;
     this.autosaveTimer = null;
     this.pendingAutosave = false;
+    this.pendingMetadataUpdate = null;
     this.lastSavedContent = '';
     this.isApplyingContent = false;
   }
@@ -54,6 +69,10 @@ export class NoteView {
 
   setOnNoteSave(callback: NoteSaveHandler): void {
     this.onNoteSaveCallback = callback;
+  }
+
+  setOnNoteMetadataSave(callback: NoteMetadataSaveHandler): void {
+    this.onNoteMetadataSaveCallback = callback;
   }
 
   private initEditor(): void {
@@ -221,7 +240,7 @@ export class NoteView {
     }
 
     this.isSaving = true;
-    this.renderActions();
+    this.renderLastSavedStatus('Saving...');
 
     try {
       const noteId = this.currentNote.id;
@@ -236,7 +255,8 @@ export class NoteView {
           const latestContent = this.getEditorText();
           this.lastSavedContent = contentToSave;
           this.currentNote = { ...updatedNote, content: latestContent };
-          this.renderHeader(this.currentNote);
+          this.renderMeta(this.currentNote);
+          this.renderLastSavedStatus();
 
           if (latestContent !== contentToSave) {
             this.pendingAutosave = true;
@@ -253,7 +273,7 @@ export class NoteView {
     } finally {
       this.isSaving = false;
       if (this.currentNote) {
-        this.renderActions();
+        this.renderLastSavedStatus();
       }
 
       if (this.pendingAutosave) {
@@ -313,6 +333,44 @@ export class NoteView {
     }
   }
 
+  private ensureLastSavedOverlay(): void {
+    if (this.lastSavedOverlay) {
+      return;
+    }
+
+    const panel = this.contentContainer.parentElement;
+    if (!panel) {
+      return;
+    }
+
+    const overlay = document.createElement('div');
+    overlay.className = 'note-last-saved-overlay hidden';
+    panel.appendChild(overlay);
+    this.lastSavedOverlay = overlay;
+  }
+
+  private renderLastSavedStatus(overrideText?: string): void {
+    this.ensureLastSavedOverlay();
+
+    if (!this.lastSavedOverlay) {
+      return;
+    }
+
+    if (!this.currentNote) {
+      this.lastSavedOverlay.classList.add('hidden');
+      return;
+    }
+
+    this.lastSavedOverlay.classList.remove('hidden');
+
+    if (overrideText) {
+      this.lastSavedOverlay.textContent = overrideText;
+      return;
+    }
+
+    this.lastSavedOverlay.textContent = `Last saved ${formatDateTime(this.currentNote.updated)}`;
+  }
+
   render(note: Note | null): void {
     if (!note) {
       this.renderEmpty();
@@ -323,7 +381,9 @@ export class NoteView {
     if (isDifferentNote) {
       this.clearAutosaveTimer();
       this.isSaving = false;
+      this.isSavingMetadata = false;
       this.pendingAutosave = false;
+      this.pendingMetadataUpdate = null;
       this.hideSelectionTooltip();
     }
 
@@ -331,67 +391,354 @@ export class NoteView {
     this.lastSavedContent = note.content;
     this.renderHeader(note);
     this.renderContent(note);
+    this.renderLastSavedStatus();
   }
 
   private renderHeader(note: Note): void {
-    const titleElement = this.headerContainer.querySelector<HTMLElement>('.note-title');
-    if (titleElement) {
-      titleElement.textContent = note.title;
-    }
-
-    const metaElement = this.headerContainer.querySelector<HTMLElement>('.note-meta');
-    if (metaElement) {
-      metaElement.innerHTML = '';
-
-      const createdItem = document.createElement('span');
-      createdItem.className = 'note-meta-item';
-      createdItem.textContent = `Created: ${formatDate(note.created)}`;
-      metaElement.appendChild(createdItem);
-
-      const updatedItem = document.createElement('span');
-      updatedItem.className = 'note-meta-item';
-      updatedItem.textContent = `Updated: ${formatDate(note.updated)}`;
-      metaElement.appendChild(updatedItem);
-
-      if (note.source) {
-        const sourceItem = document.createElement('span');
-        sourceItem.className = 'note-meta-item';
-        sourceItem.textContent = `Source: ${note.source}`;
-        metaElement.appendChild(sourceItem);
-      }
-    }
-
-    const tagsElement = this.headerContainer.querySelector<HTMLElement>('.note-tags');
-    if (tagsElement) {
-      tagsElement.innerHTML = '';
-
-      if (note.priority > 0) {
-        const badge = createPriorityBadge(note.priority);
-        if (badge) {
-          tagsElement.appendChild(badge);
-        }
-      }
-
-      for (const tag of note.tags) {
-        tagsElement.appendChild(createTagChip(tag));
-      }
-    }
-
+    this.renderTitle(note);
+    this.renderMeta(note);
+    this.renderTags(note);
     this.renderActions();
+  }
+
+  private renderTitle(note: Note): void {
+    const titleElement = this.headerContainer.querySelector<HTMLElement>('.note-title');
+    if (!titleElement) {
+      return;
+    }
+
+    let titleInput = titleElement.querySelector<HTMLInputElement>('.note-title-input');
+    if (!titleInput) {
+      titleElement.innerHTML = '';
+
+      const newTitleInput = document.createElement('input');
+      newTitleInput.className = 'note-title-input';
+      newTitleInput.type = 'text';
+      newTitleInput.setAttribute('aria-label', 'Note title');
+
+      newTitleInput.addEventListener('blur', () => {
+        void this.handleTitleSubmit(newTitleInput.value);
+      });
+
+      newTitleInput.addEventListener('keydown', (event) => {
+        if (event.key === 'Enter') {
+          event.preventDefault();
+          newTitleInput.blur();
+          return;
+        }
+
+        if (event.key === 'Escape') {
+          event.preventDefault();
+          if (this.currentNote) {
+            newTitleInput.value = this.currentNote.title;
+          }
+          newTitleInput.blur();
+        }
+      });
+
+      titleElement.appendChild(newTitleInput);
+      titleInput = newTitleInput;
+    }
+
+    if (!titleInput) {
+      return;
+    }
+
+    if (document.activeElement !== titleInput) {
+      titleInput.value = note.title;
+    }
+  }
+
+  private renderMeta(note: Note): void {
+    const metaElement = this.headerContainer.querySelector<HTMLElement>('.note-meta');
+    if (!metaElement) {
+      return;
+    }
+
+    metaElement.innerHTML = '';
+
+    const createdItem = document.createElement('span');
+    createdItem.className = 'note-meta-item';
+    createdItem.textContent = `Created: ${formatDate(note.created)}`;
+    metaElement.appendChild(createdItem);
+
+    const updatedItem = document.createElement('span');
+    updatedItem.className = 'note-meta-item';
+    updatedItem.textContent = `Updated: ${formatDate(note.updated)}`;
+    metaElement.appendChild(updatedItem);
+  }
+
+  private renderTags(note: Note): void {
+    const tagsElement = this.headerContainer.querySelector<HTMLElement>('.note-tags');
+    if (!tagsElement) {
+      return;
+    }
+
+    tagsElement.innerHTML = '';
+
+    if (note.priority > 0) {
+      const badge = createPriorityBadge(note.priority);
+      if (badge) {
+        tagsElement.appendChild(badge);
+      }
+    }
+
+    for (const tag of note.tags) {
+      tagsElement.appendChild(createTagChip(tag, (tagToRemove) => this.handleTagRemove(tagToRemove)));
+    }
+
+    const addTagControl = document.createElement('div');
+    addTagControl.className = 'tag-add-control';
+
+    const addTagButton = document.createElement('button');
+    addTagButton.type = 'button';
+    addTagButton.className = 'tag-add-btn';
+    addTagButton.textContent = '+';
+    addTagButton.setAttribute('aria-label', 'Add tag');
+    addTagButton.setAttribute('aria-expanded', 'false');
+
+    const addTagPopover = document.createElement('div');
+    addTagPopover.className = 'tag-add-popover hidden';
+
+    const addTagInput = document.createElement('input');
+    addTagInput.className = 'tag-add-input';
+    addTagInput.type = 'text';
+    addTagInput.setAttribute('aria-label', 'New tag');
+
+    const closePopover = (): void => {
+      addTagPopover.classList.add('hidden');
+      addTagButton.setAttribute('aria-expanded', 'false');
+      addTagInput.value = '';
+    };
+
+    const openPopover = (): void => {
+      addTagPopover.classList.remove('hidden');
+      addTagButton.setAttribute('aria-expanded', 'true');
+      window.setTimeout(() => addTagInput.focus(), 0);
+    };
+
+    const submitTag = (): void => {
+      this.handleTagAdd(addTagInput);
+      closePopover();
+    };
+
+    addTagButton.addEventListener('click', () => {
+      if (addTagPopover.classList.contains('hidden')) {
+        openPopover();
+      } else {
+        closePopover();
+      }
+    });
+
+    addTagInput.addEventListener('keydown', (event) => {
+      if (event.key === 'Enter' || event.key === ',') {
+        event.preventDefault();
+        submitTag();
+        return;
+      }
+
+      if (event.key === 'Escape') {
+        event.preventDefault();
+        closePopover();
+      }
+    });
+
+    addTagControl.addEventListener('focusout', () => {
+      window.setTimeout(() => {
+        if (!addTagControl.contains(document.activeElement)) {
+          closePopover();
+        }
+      }, 0);
+    });
+
+    addTagPopover.append(addTagInput);
+    addTagControl.append(addTagButton, addTagPopover);
+    tagsElement.appendChild(addTagControl);
   }
 
   private renderActions(): void {
     const actionsElement = this.headerContainer.querySelector<HTMLElement>('.note-actions');
-    if (!actionsElement) {
+    if (actionsElement) {
+      actionsElement.innerHTML = '';
+    }
+  }
+
+  private normalizeTags(tags: string[]): string[] {
+    const seen = new Set<string>();
+    const normalized: string[] = [];
+
+    for (const rawTag of tags) {
+      const tag = rawTag.trim();
+      if (!tag) {
+        continue;
+      }
+
+      const key = tag.toLocaleLowerCase();
+      if (seen.has(key)) {
+        continue;
+      }
+
+      seen.add(key);
+      normalized.push(tag);
+    }
+
+    return normalized;
+  }
+
+  private haveSameTags(left: string[], right: string[]): boolean {
+    if (left.length !== right.length) {
+      return false;
+    }
+
+    return left.every((tag, index) => tag === right[index]);
+  }
+
+  private async handleTitleSubmit(rawTitle: string): Promise<void> {
+    if (!this.currentNote) {
       return;
     }
 
-    actionsElement.innerHTML = '';
+    const nextTitle = rawTitle.trim();
+    if (!nextTitle) {
+      this.renderTitle(this.currentNote);
+      return;
+    }
 
-    const saveStatus = document.createElement('span');
-    saveStatus.className = 'note-save-status';
-    saveStatus.textContent = this.isSaving ? 'Saving...' : 'Autosave on';
-    actionsElement.appendChild(saveStatus);
+    if (nextTitle === this.currentNote.title) {
+      return;
+    }
+
+    await this.saveMetadata({
+      title: nextTitle,
+      tags: this.currentNote.tags,
+    });
+  }
+
+  private getDraftTitle(): string {
+    const titleInput = this.headerContainer.querySelector<HTMLInputElement>('.note-title-input');
+    const draftTitle = titleInput?.value.trim();
+    if (draftTitle) {
+      return draftTitle;
+    }
+
+    return this.currentNote?.title ?? '';
+  }
+
+  private handleTagAdd(input: HTMLInputElement): void {
+    if (!this.currentNote) {
+      return;
+    }
+
+    const nextTag = input.value.trim();
+    if (!nextTag) {
+      return;
+    }
+
+    input.value = '';
+
+    const hasTag = this.currentNote.tags.some(
+      (existingTag) => existingTag.toLocaleLowerCase() === nextTag.toLocaleLowerCase(),
+    );
+    if (hasTag) {
+      return;
+    }
+
+    void this.saveMetadata({
+      title: this.getDraftTitle(),
+      tags: [...this.currentNote.tags, nextTag],
+    });
+  }
+
+  private handleTagRemove(tagToRemove: string): void {
+    if (!this.currentNote) {
+      return;
+    }
+
+    const nextTags = this.currentNote.tags.filter(
+      (tag) => tag.toLocaleLowerCase() !== tagToRemove.toLocaleLowerCase(),
+    );
+
+    if (nextTags.length === this.currentNote.tags.length) {
+      return;
+    }
+
+    void this.saveMetadata({
+      title: this.getDraftTitle(),
+      tags: nextTags,
+    });
+  }
+
+  private async saveMetadata(update: MetadataUpdate): Promise<void> {
+    if (!this.currentNote || !this.onNoteMetadataSaveCallback) {
+      return;
+    }
+
+    const normalizedTitle = update.title.trim();
+    if (!normalizedTitle) {
+      this.renderHeader(this.currentNote);
+      return;
+    }
+
+    const normalizedTags = this.normalizeTags(update.tags);
+
+    if (
+      normalizedTitle === this.currentNote.title &&
+      this.haveSameTags(normalizedTags, this.currentNote.tags)
+    ) {
+      return;
+    }
+
+    if (this.isSavingMetadata) {
+      this.pendingMetadataUpdate = {
+        title: normalizedTitle,
+        tags: normalizedTags,
+      };
+      return;
+    }
+
+    this.isSavingMetadata = true;
+    this.renderLastSavedStatus('Saving...');
+
+    try {
+      const noteId = this.currentNote.id;
+      const updatedNote = await this.onNoteMetadataSaveCallback(
+        noteId,
+        normalizedTitle,
+        normalizedTags,
+      );
+
+      if (!updatedNote || this.currentNote?.id !== noteId) {
+        return;
+      }
+
+      const editorContent = this.getEditorText();
+      const hasUnsavedEditorChanges = editorContent !== this.lastSavedContent;
+
+      this.currentNote = {
+        ...updatedNote,
+        content: editorContent,
+      };
+
+      this.renderHeader(this.currentNote);
+      this.renderLastSavedStatus();
+
+      if (hasUnsavedEditorChanges) {
+        this.scheduleAutosave();
+      }
+    } catch (error) {
+      console.error('Error saving note metadata:', error);
+    } finally {
+      this.isSavingMetadata = false;
+
+      if (this.pendingMetadataUpdate) {
+        const nextUpdate = this.pendingMetadataUpdate;
+        this.pendingMetadataUpdate = null;
+        void this.saveMetadata(nextUpdate);
+        return;
+      }
+
+      this.renderLastSavedStatus();
+    }
   }
 
   private renderContent(note: Note): void {
@@ -471,7 +818,9 @@ export class NoteView {
     this.clearAutosaveTimer();
     this.currentNote = null;
     this.isSaving = false;
+    this.isSavingMetadata = false;
     this.pendingAutosave = false;
+    this.pendingMetadataUpdate = null;
     this.lastSavedContent = '';
     this.isApplyingContent = false;
     this.hideSelectionTooltip();
@@ -499,6 +848,8 @@ export class NoteView {
     this.contentContainer.innerHTML =
       '<p class="empty-state">Select a note from the list to view its content.</p>';
 
+    this.renderLastSavedStatus();
+
     if (this.editor) {
       this.editor.destroy();
       this.editor = null;
@@ -516,6 +867,11 @@ export class NoteView {
     if (this.tooltip) {
       this.tooltip.remove();
       this.tooltip = null;
+    }
+
+    if (this.lastSavedOverlay) {
+      this.lastSavedOverlay.remove();
+      this.lastSavedOverlay = null;
     }
   }
 }

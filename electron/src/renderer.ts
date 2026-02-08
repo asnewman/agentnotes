@@ -9,6 +9,7 @@ import {
   listNotes,
   selectDirectory,
   updateNote,
+  updateNoteMetadata,
 } from './lib/noteStore';
 import type { CommentAnchor, Note, NotesListResponse, NotesListResult } from './types';
 
@@ -177,6 +178,32 @@ async function onNoteSave(noteId: string, content: string): Promise<Note | null>
   }
 }
 
+async function onNoteMetadataSave(noteId: string, title: string, tags: string[]): Promise<Note | null> {
+  try {
+    const result = await updateNoteMetadata(noteId, title, tags);
+
+    if (!result.success || !result.note) {
+      console.error('Failed to update note metadata:', result.error);
+      return null;
+    }
+
+    const isStillCurrentNote = currentNoteId === noteId;
+    clearCache();
+    if (isStillCurrentNote) {
+      currentNoteId = result.note.id;
+      commentsPanel?.render(result.note.comments);
+    }
+
+    const notes = extractNotes(await listNotes());
+    noteList?.render(notes);
+
+    return result.note;
+  } catch (error) {
+    console.error('Error updating note metadata:', error);
+    return null;
+  }
+}
+
 function updateDirectoryIndicator(path: string | null): void {
   if (!titleBarDirectory || !directoryPath) {
     return;
@@ -269,6 +296,7 @@ async function init(): Promise<void> {
 
   noteView.setOnCommentCreate(onCommentCreate);
   noteView.setOnNoteSave(onNoteSave);
+  noteView.setOnNoteMetadataSave(onNoteMetadataSave);
   commentsPanel.setOnCommentSubmit(onCommentSubmit);
   commentsPanel.setOnCommentDelete(onCommentDelete);
 

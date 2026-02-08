@@ -66,10 +66,21 @@ export interface UpdateNotePayload {
   content: string;
 }
 
+export interface UpdateNoteMetadataPayload {
+  noteId: string;
+  title: string;
+  tags: string[];
+}
+
 export interface PreloadApi {
   listNotes: () => Promise<NotesListResult>;
   getNote: (noteId: string) => Promise<Note | null>;
   updateNote: (noteId: string, content: string) => Promise<CommentMutationResult>;
+  updateNoteMetadata: (
+    noteId: string,
+    title: string,
+    tags: string[],
+  ) => Promise<CommentMutationResult>;
   addComment: (
     noteId: string,
     content: string,

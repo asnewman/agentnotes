@@ -12,6 +12,12 @@ const api: PreloadApi = {
   getNote: (noteId: string) => ipcRenderer.invoke('notes:get', noteId) as Promise<Note | null>,
   updateNote: (noteId: string, content: string) =>
     ipcRenderer.invoke('notes:update', { noteId, content }) as Promise<CommentMutationResult>,
+  updateNoteMetadata: (noteId: string, title: string, tags: string[]) =>
+    ipcRenderer.invoke('notes:updateMetadata', {
+      noteId,
+      title,
+      tags,
+    }) as Promise<CommentMutationResult>,
   addComment: (
     noteId: string,
     content: string,

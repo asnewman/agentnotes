@@ -45,6 +45,20 @@ export async function updateNote(noteId: string, content: string): Promise<Comme
   return result;
 }
 
+export async function updateNoteMetadata(
+  noteId: string,
+  title: string,
+  tags: string[],
+): Promise<CommentMutationResult> {
+  const result = await window.api.updateNoteMetadata(noteId, title, tags);
+
+  if (result.success) {
+    clearCache();
+  }
+
+  return result;
+}
+
 export function clearCache(): void {
   notesCache = null;
 }

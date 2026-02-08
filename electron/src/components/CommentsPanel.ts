@@ -100,10 +100,7 @@ export class CommentsPanel {
 
     const header = document.createElement('div');
     header.className = 'comment-header';
-
-    const author = document.createElement('span');
-    author.className = 'comment-author';
-    author.textContent = comment.author || 'Anonymous';
+    header.classList.add('comment-header-actions-only');
 
     const actions = document.createElement('div');
     actions.className = 'comment-actions';
@@ -131,7 +128,7 @@ export class CommentsPanel {
       actions.appendChild(deleteButton);
     }
 
-    header.append(author, actions);
+    header.append(actions);
     card.appendChild(header);
 
     const previewText = comment.anchor.quote || '';
@@ -163,16 +160,13 @@ export class CommentsPanel {
 
     const header = document.createElement('div');
     header.className = 'comment-header';
-
-    const title = document.createElement('span');
-    title.className = 'comment-author';
-    title.textContent = 'New Comment';
+    header.classList.add('comment-header-pending');
 
     const anchorBadge = document.createElement('span');
     anchorBadge.className = 'comment-line-badge';
     anchorBadge.textContent = 'Anchored text';
 
-    header.append(title, anchorBadge);
+    header.append(anchorBadge);
     card.appendChild(header);
 
     const preview = document.createElement('div');

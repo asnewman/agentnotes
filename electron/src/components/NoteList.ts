@@ -16,7 +16,27 @@ interface NoteNode {
 type TreeNode = DirectoryNode | NoteNode;
 
 function parseDate(value: string): number {
-  return new Date(value).getTime();
+  const timestamp = Date.parse(value);
+  return Number.isNaN(timestamp) ? 0 : timestamp;
+}
+
+function compareNotesByCreated(a: Note, b: Note): number {
+  const createdDiff = parseDate(b.created) - parseDate(a.created);
+  if (createdDiff !== 0) {
+    return createdDiff;
+  }
+
+  const pathDiff = a.relativePath.localeCompare(b.relativePath);
+  if (pathDiff !== 0) {
+    return pathDiff;
+  }
+
+  const titleDiff = a.title.localeCompare(b.title);
+  if (titleDiff !== 0) {
+    return titleDiff;
+  }
+
+  return a.id.localeCompare(b.id);
 }
 
 function buildNoteTree(notes: Note[]): TreeNode[] {
@@ -32,7 +52,7 @@ function buildNoteTree(notes: Note[]): TreeNode[] {
       return -1;
     }
 
-    return parseDate(b.created) - parseDate(a.created);
+    return compareNotesByCreated(a, b);
   });
 
   for (const note of sortedNotes) {
@@ -82,7 +102,7 @@ function buildNoteTree(notes: Note[]): TreeNode[] {
       }
 
       if (a.type === 'note' && b.type === 'note') {
-        return parseDate(b.note.created) - parseDate(a.note.created);
+        return compareNotesByCreated(a.note, b.note);
       }
 
       return 0;

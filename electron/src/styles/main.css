@@ -162,6 +162,7 @@ html, body {
 }
 
 .note-view-panel {
+  position: relative;
   flex: 1;
   min-width: 300px;
   background-color: var(--bg-primary);
