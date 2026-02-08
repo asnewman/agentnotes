@@ -1,9 +1,8 @@
 import { Editor } from '@tiptap/core';
 import Highlight from '@tiptap/extension-highlight';
 import StarterKit from '@tiptap/starter-kit';
-import { getAllHighlightRanges } from '../lib/highlighter';
+import { buildAnchorFromRange, getAllHighlightRanges } from '../lib/highlighter';
 import { formatDate } from '../lib/noteStore';
-import { findTextInContent, getTextFromEditor } from '../lib/positionMapper';
 import type { CommentAnchor, Note } from '../types';
 import { createPriorityBadge, createTagChip } from './TagChip';
 
@@ -14,8 +13,6 @@ interface CurrentSelection {
 
 type CommentCreateHandler = (anchor: CommentAnchor, selectedText: string) => void;
 type NoteSaveHandler = (noteId: string, content: string) => Promise<Note | null>;
-
-const anchorContextChars = 64;
 
 export class NoteView {
   private headerContainer: HTMLElement;
@@ -112,22 +109,30 @@ export class NoteView {
       return;
     }
 
-    const selectedText = getTextFromEditor(editor, from, to);
+    const selectedText = editor.state.doc.textBetween(from, to, '\n', '\n');
     if (!selectedText || selectedText.trim().length === 0) {
       this.hideSelectionTooltip();
       return;
     }
 
-    const positions = findTextInContent(this.currentNote.content, selectedText, from);
-    if (!positions) {
+    const prefixText = editor.state.doc.textBetween(0, from, '\n', '\n');
+    const startChar = prefixText.length;
+    const endChar = startChar + selectedText.length;
+
+    if (endChar > this.currentNote.content.length) {
       this.hideSelectionTooltip();
       return;
     }
 
-    this.currentSelection = {
-      anchor: this.buildAnchor(this.currentNote.content, positions.startChar, positions.endChar),
-      text: selectedText.trim(),
-    };
+    try {
+      this.currentSelection = {
+        anchor: this.buildAnchor(this.currentNote.content, startChar, endChar),
+        text: selectedText.trim(),
+      };
+    } catch {
+      this.hideSelectionTooltip();
+      return;
+    }
 
     this.showSelectionTooltip();
   }
@@ -394,14 +399,8 @@ export class NoteView {
   }
 
   private buildAnchor(content: string, startChar: number, endChar: number): CommentAnchor {
-    const prefixStart = Math.max(0, startChar - anchorContextChars);
-    const suffixEnd = Math.min(content.length, endChar + anchorContextChars);
-
-    return {
-      exact: content.slice(startChar, endChar),
-      prefix: content.slice(prefixStart, startChar),
-      suffix: content.slice(endChar, suffixEnd),
-    };
+    const rev = this.currentNote?.commentRev ?? 0;
+    return buildAnchorFromRange(content, startChar, endChar, rev);
   }
 
   private applyHighlights(note: Note): void {

@@ -1,7 +1,14 @@
+export type CommentAffinity = 'before' | 'after';
+export type CommentStatus = 'attached' | 'stale' | 'detached';
+
 export interface CommentAnchor {
-  exact: string;
-  prefix: string;
-  suffix: string;
+  from: number;
+  to: number;
+  rev: number;
+  startAffinity?: CommentAffinity;
+  endAffinity?: CommentAffinity;
+  quote?: string;
+  quoteHash?: string;
 }
 
 export interface NoteComment {
@@ -9,6 +16,7 @@ export interface NoteComment {
   author: string;
   created: string;
   content: string;
+  status: CommentStatus;
   anchor: CommentAnchor;
 }
 
@@ -20,6 +28,7 @@ export interface Note {
   updated: string;
   source: string;
   priority: number;
+  commentRev: number;
   comments: NoteComment[];
   content: string;
   filename: string;

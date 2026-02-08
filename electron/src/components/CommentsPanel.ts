@@ -113,6 +113,11 @@ export class CommentsPanel {
     date.textContent = formatDateTime(comment.created);
     actions.appendChild(date);
 
+    const statusBadge = document.createElement('span');
+    statusBadge.className = 'comment-line-badge';
+    statusBadge.textContent = comment.status;
+    actions.appendChild(statusBadge);
+
     if (comment.id) {
       const isDeleting = this.deletingCommentIds.has(comment.id);
       const deleteButton = document.createElement('button');
@@ -129,7 +134,7 @@ export class CommentsPanel {
     header.append(author, actions);
     card.appendChild(header);
 
-    const previewText = comment.anchor.exact;
+    const previewText = comment.anchor.quote || '';
     if (previewText) {
       const preview = document.createElement('div');
       preview.className = 'comment-preview';

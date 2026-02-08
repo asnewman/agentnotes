@@ -22,7 +22,7 @@ A local-first CLI knowledge base storing markdown notes with YAML frontmatter.
   - `src/styles/main.css` - Core styles including title bar
   - `src/styles/components.css` - Component-specific styles
   - `src/components/` - UI components (NoteList, NoteView, CommentsPanel)
-  - `src/lib/` - Utilities (noteStore, highlighter, positionMapper)
+  - `src/lib/` - Utilities (noteStore, highlighter)
 
 ## Storage
 
@@ -44,7 +44,7 @@ Notes can be organized in subdirectories:
 └── 2024-01-15-root-level-note.md
 ```
 
-Each note has YAML frontmatter with: id (ULID), title, tags, created, updated, source, priority, comments.
+Each note has YAML frontmatter with: id (ULID), title, tags, created, updated, source, priority, comment_rev, comments.
 
 The CLI operates relative to the current working directory - each project can have its own independent notes.
 
@@ -88,12 +88,14 @@ Users can create comments by highlighting text in the note view:
 3. Click the button to open a pending comment card in the comments panel
 4. Type the comment and press Enter to save (Escape to cancel, Shift+Enter for newlines)
 
-Comments are stored with required text anchors:
-- `anchor.exact` - exact selected text
-- `anchor.prefix` - surrounding text before the selection
-- `anchor.suffix` - surrounding text after the selection
+Comments use deterministic range anchors:
+- `anchor.from` - start character offset (0-based)
+- `anchor.to` - end character offset (exclusive)
+- `anchor.rev` - note revision at time of anchoring
+- `anchor.start_affinity` / `anchor.end_affinity` - boundary mapping policy for inserts at anchor edges
+- `status` - `attached`, `stale`, or `detached`
 
-Highlights are resolved from anchors at render time. If an anchor is ambiguous or missing after edits, the comment remains visible in the panel but is not highlighted.
+On save, note edits are converted into deterministic text operations and comment ranges are transformed through those operations. Comments touching edited text become `stale`; ranges fully removed become `detached`.
 
 ### Deleting Comments in GUI
 Users can delete existing comments from the comments panel:
@@ -142,8 +144,9 @@ The `comment` command manages comments on notes. Comments are stored in the note
 ```bash
 ./agentnotes comment add "My Note" "This is a comment"
 ./agentnotes comment add "My Note" --author=claude "AI comment"
-./agentnotes comment add "My Note" "Comment on selected text" --exact="selected text"
-echo "comment" | ./agentnotes comment add "My Note" --exact="selected text"
+./agentnotes comment add "My Note" "Comment on selected text" --from=42 --to=57
+./agentnotes comment add "My Note" "Comment on unique text" --exact="selected text"
+echo "comment" | ./agentnotes comment add "My Note" --from=42 --to=57
 ```
 
 ### List comments

@@ -207,11 +207,19 @@ func FormatCommentList(comments []notes.Comment) string {
 
 		// Content
 		sb.WriteString("  " + c.Content + "\n")
-		anchorPreview := c.Anchor.Exact
+		anchorPreview := c.Anchor.Quote
+		if anchorPreview == "" {
+			anchorPreview = fmt.Sprintf("[%d:%d)", c.Anchor.From, c.Anchor.To)
+		}
 		if len(anchorPreview) > 60 {
 			anchorPreview = anchorPreview[:57] + "..."
 		}
-		sb.WriteString(Dim + "  ↳ " + "\"" + anchorPreview + "\"" + Reset + "\n")
+		status := string(c.Status)
+		if status == "" {
+			status = string(notes.CommentAttached)
+		}
+		sb.WriteString(Dim + fmt.Sprintf("  ↳ %s [%d:%d] (rev %d)", status, c.Anchor.From, c.Anchor.To, c.Anchor.Rev) + Reset + "\n")
+		sb.WriteString(Dim + "     " + "\"" + anchorPreview + "\"" + Reset + "\n")
 	}
 
 	return sb.String()
@@ -237,11 +245,19 @@ func FormatCommentsInline(content string, comments []notes.Comment) string {
 		sb.WriteString(c.Content)
 		sb.WriteString(Dim + " [" + c.ID[:8] + "]" + Reset)
 		sb.WriteString("\n")
-		anchorPreview := c.Anchor.Exact
+		anchorPreview := c.Anchor.Quote
+		if anchorPreview == "" {
+			anchorPreview = fmt.Sprintf("[%d:%d)", c.Anchor.From, c.Anchor.To)
+		}
 		if len(anchorPreview) > 60 {
 			anchorPreview = anchorPreview[:57] + "..."
 		}
-		sb.WriteString(Dim + "  ↳ " + "\"" + anchorPreview + "\"" + Reset)
+		status := string(c.Status)
+		if status == "" {
+			status = string(notes.CommentAttached)
+		}
+		sb.WriteString(Dim + fmt.Sprintf("  ↳ %s [%d:%d] (rev %d)", status, c.Anchor.From, c.Anchor.To, c.Anchor.Rev) + Reset + "\n")
+		sb.WriteString(Dim + "     " + "\"" + anchorPreview + "\"" + Reset)
 		sb.WriteString("\n")
 	}
 

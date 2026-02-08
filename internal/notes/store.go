@@ -14,8 +14,6 @@ type Store struct {
 	notesPath string
 }
 
-const anchorContextChars = 64
-
 // NewStore creates a new Store with the default base path (.agentnotes in current directory)
 func NewStore() (*Store, error) {
 	cwd, err := os.Getwd()
@@ -63,17 +61,40 @@ func (s *Store) Update(note *Note) error {
 		return err
 	}
 
+	existing, err := s.readNote(path)
+	if err != nil {
+		return err
+	}
+
+	NormalizeNoteComments(existing)
+	NormalizeNoteComments(note)
+
+	if existing.Content != note.Content {
+		transformed, nextRev := TransformCommentsForContentChange(
+			existing.Comments,
+			existing.Content,
+			note.Content,
+			existing.CommentRev,
+		)
+		note.Comments = transformed
+		note.CommentRev = nextRev
+	} else {
+		if note.CommentRev == 0 {
+			note.CommentRev = existing.CommentRev
+		}
+	}
+
 	return s.writeNote(path, note)
 }
 
 // Save creates or updates a note
 func (s *Store) Save(note *Note) error {
-	path, err := s.findNotePath(note.ID)
+	_, err := s.findNotePath(note.ID)
 	if err != nil {
 		// Note doesn't exist, create it
 		return s.Create(note)
 	}
-	return s.writeNote(path, note)
+	return s.Update(note)
 }
 
 // Get retrieves a note by ID or title
@@ -157,36 +178,6 @@ func (s *Store) GetPath(idOrTitle string) (string, error) {
 	return s.findNotePath(note.ID)
 }
 
-// BuildAnchor builds a required anchor from the note content and selected text.
-func BuildAnchor(noteContent, exact string) (CommentAnchor, error) {
-	exact = strings.TrimSpace(exact)
-	if exact == "" {
-		return CommentAnchor{}, fmt.Errorf("anchor exact text cannot be empty")
-	}
-
-	start := strings.Index(noteContent, exact)
-	if start < 0 {
-		return CommentAnchor{}, fmt.Errorf("anchor text not found in note content")
-	}
-
-	end := start + len(exact)
-	prefixStart := start - anchorContextChars
-	if prefixStart < 0 {
-		prefixStart = 0
-	}
-
-	suffixEnd := end + anchorContextChars
-	if suffixEnd > len(noteContent) {
-		suffixEnd = len(noteContent)
-	}
-
-	return CommentAnchor{
-		Exact:  exact,
-		Prefix: noteContent[prefixStart:start],
-		Suffix: noteContent[end:suffixEnd],
-	}, nil
-}
-
 // AddComment adds a comment to a note and returns the updated note and new comment
 func (s *Store) AddComment(noteID, content, author string, anchor CommentAnchor) (*Note, *Comment, error) {
 	note, err := s.Get(noteID)
@@ -194,11 +185,33 @@ func (s *Store) AddComment(noteID, content, author string, anchor CommentAnchor)
 		return nil, nil, err
 	}
 
-	if strings.TrimSpace(anchor.Exact) == "" {
-		return nil, nil, fmt.Errorf("anchor exact text cannot be empty")
+	NormalizeNoteComments(note)
+
+	if note.CommentRev < 1 {
+		note.CommentRev = 1
 	}
 
-	comment := NewComment(author, content, anchor)
+	if anchor.Rev <= 0 {
+		anchor.Rev = note.CommentRev
+	}
+
+	if anchor.Rev != note.CommentRev {
+		return nil, nil, fmt.Errorf("anchor revision mismatch: expected rev %d, got rev %d", note.CommentRev, anchor.Rev)
+	}
+
+	normalizedAnchor, err := BuildAnchorFromRange(note.Content, anchor.From, anchor.To, note.CommentRev)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	if anchor.StartAffinity != "" {
+		normalizedAnchor.StartAffinity = anchor.StartAffinity
+	}
+	if anchor.EndAffinity != "" {
+		normalizedAnchor.EndAffinity = anchor.EndAffinity
+	}
+
+	comment := NewComment(author, content, normalizedAnchor)
 	note.Comments = append(note.Comments, *comment)
 	note.Updated = comment.Created
 
@@ -238,6 +251,8 @@ func (s *Store) DeleteComment(noteID, commentID string) error {
 
 // writeNote writes a note to the specified path
 func (s *Store) writeNote(path string, note *Note) error {
+	NormalizeNoteComments(note)
+
 	data, err := note.Marshal()
 	if err != nil {
 		return fmt.Errorf("failed to marshal note: %w", err)
@@ -262,6 +277,8 @@ func (s *Store) readNote(path string) (*Note, error) {
 	if err != nil {
 		return nil, fmt.Errorf("failed to parse note: %w", err)
 	}
+
+	NormalizeNoteComments(note)
 
 	return note, nil
 }

@@ -542,6 +542,8 @@ func (app *App) commentCmd() *cobra.Command {
 func (app *App) commentAddCmd() *cobra.Command {
 	var author string
 	var exact string
+	var from int
+	var to int
 
 	cmd := &cobra.Command{
 		Use:   "add <note> [comment]",
@@ -551,8 +553,9 @@ func (app *App) commentAddCmd() *cobra.Command {
 Examples:
   agentnotes comment add "My Note" "This is a comment"
   agentnotes comment add "My Note" --author=claude "AI comment"
-  agentnotes comment add "My Note" "Comment on selected text" --exact "selected text"
-  echo "comment" | agentnotes comment add "My Note" --exact "selected text"`,
+  agentnotes comment add "My Note" "Comment on selected text" --from 42 --to 57
+  agentnotes comment add "My Note" "Comment on unique text" --exact "selected text"
+  echo "comment" | agentnotes comment add "My Note" --from 42 --to 57`,
 		Args: cobra.RangeArgs(1, 2),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			noteID := args[0]
@@ -585,14 +588,41 @@ Examples:
 				return fmt.Errorf("comment cannot be empty")
 			}
 
+			hasExact := cmd.Flags().Changed("exact")
+			hasFrom := cmd.Flags().Changed("from")
+			hasTo := cmd.Flags().Changed("to")
+
+			if hasExact && (hasFrom || hasTo) {
+				return fmt.Errorf("--exact is mutually exclusive with --from/--to")
+			}
+			if !hasExact && !(hasFrom && hasTo) {
+				return fmt.Errorf("provide either --exact or both --from and --to")
+			}
+			if (hasFrom && !hasTo) || (!hasFrom && hasTo) {
+				return fmt.Errorf("--from and --to must be provided together")
+			}
+
 			note, err := app.Store.Get(noteID)
 			if err != nil {
 				return err
 			}
 
-			anchor, err := notes.BuildAnchor(note.Content, exact)
-			if err != nil {
-				return err
+			anchorRev := note.CommentRev
+			if anchorRev < 1 {
+				anchorRev = 1
+			}
+
+			var anchor notes.CommentAnchor
+			if hasExact {
+				anchor, err = notes.BuildAnchor(note.Content, exact, anchorRev)
+				if err != nil {
+					return err
+				}
+			} else {
+				anchor, err = notes.BuildAnchorFromRange(note.Content, from, to, anchorRev)
+				if err != nil {
+					return err
+				}
 			}
 
 			note, comment, err := app.Store.AddComment(note.ID, content, author, anchor)
@@ -606,8 +636,9 @@ Examples:
 	}
 
 	cmd.Flags().StringVar(&author, "author", "", "Comment author (e.g., 'user', 'claude')")
-	cmd.Flags().StringVar(&exact, "exact", "", "Exact selected text to anchor comment to")
-	_ = cmd.MarkFlagRequired("exact")
+	cmd.Flags().StringVar(&exact, "exact", "", "Anchor using exact text (must be unique in the note)")
+	cmd.Flags().IntVar(&from, "from", -1, "Anchor start offset (0-based)")
+	cmd.Flags().IntVar(&to, "to", -1, "Anchor end offset (0-based, exclusive)")
 
 	return cmd
 }

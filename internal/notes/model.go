@@ -12,11 +12,26 @@ import (
 	"gopkg.in/yaml.v3"
 )
 
-// Comment represents a comment on a note
+type CommentAffinity string
+type CommentStatus string
+
+const (
+	AffinityBefore CommentAffinity = "before"
+	AffinityAfter  CommentAffinity = "after"
+
+	CommentAttached CommentStatus = "attached"
+	CommentStale    CommentStatus = "stale"
+	CommentDetached CommentStatus = "detached"
+)
+
 type CommentAnchor struct {
-	Exact  string `yaml:"exact"`
-	Prefix string `yaml:"prefix"`
-	Suffix string `yaml:"suffix"`
+	From          int             `yaml:"from"`
+	To            int             `yaml:"to"`
+	Rev           int             `yaml:"rev"`
+	StartAffinity CommentAffinity `yaml:"start_affinity,omitempty"`
+	EndAffinity   CommentAffinity `yaml:"end_affinity,omitempty"`
+	Quote         string          `yaml:"quote,omitempty"`
+	QuoteHash     string          `yaml:"quote_hash,omitempty"`
 }
 
 type Comment struct {
@@ -24,6 +39,7 @@ type Comment struct {
 	Author  string        `yaml:"author"`
 	Created time.Time     `yaml:"created"`
 	Content string        `yaml:"content"`
+	Status  CommentStatus `yaml:"status,omitempty"`
 	Anchor  CommentAnchor `yaml:"anchor"`
 }
 
@@ -34,21 +50,23 @@ func NewComment(author, content string, anchor CommentAnchor) *Comment {
 		Author:  author,
 		Created: time.Now().UTC(),
 		Content: content,
+		Status:  CommentAttached,
 		Anchor:  anchor,
 	}
 }
 
 // Note represents a markdown note with metadata
 type Note struct {
-	ID       string    `yaml:"id"`
-	Title    string    `yaml:"title"`
-	Tags     []string  `yaml:"tags,omitempty"`
-	Created  time.Time `yaml:"created"`
-	Updated  time.Time `yaml:"updated"`
-	Source   string    `yaml:"source,omitempty"`
-	Priority int       `yaml:"priority,omitempty"`
-	Comments []Comment `yaml:"comments,omitempty"`
-	Content  string    `yaml:"-"` // Not part of frontmatter
+	ID         string    `yaml:"id"`
+	Title      string    `yaml:"title"`
+	Tags       []string  `yaml:"tags,omitempty"`
+	Created    time.Time `yaml:"created"`
+	Updated    time.Time `yaml:"updated"`
+	Source     string    `yaml:"source,omitempty"`
+	Priority   int       `yaml:"priority,omitempty"`
+	CommentRev int       `yaml:"comment_rev,omitempty"`
+	Comments   []Comment `yaml:"comments,omitempty"`
+	Content    string    `yaml:"-"` // Not part of frontmatter
 }
 
 // NewNote creates a new note with generated ID and timestamps
