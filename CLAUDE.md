@@ -80,6 +80,14 @@ Users can create comments by highlighting text in the note view:
 
 Comments are stored with character positions (`start_char`/`end_char`) and the highlighted text gets a yellow background. The comments panel shows a preview of the highlighted text for each comment.
 
+### Deleting Comments in GUI
+Users can delete existing comments from the comments panel:
+1. Open a note with comments
+2. Click the `Delete` button on the comment card you want to remove
+3. Confirm the deletion in the prompt
+
+The comment is removed from YAML frontmatter and the note's `updated` timestamp is refreshed.
+
 ## Testing Notes
 
 Create notes via stdin for non-interactive testing:
