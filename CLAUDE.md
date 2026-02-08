@@ -93,9 +93,14 @@ Comments use deterministic range anchors:
 - `anchor.to` - end character offset (exclusive)
 - `anchor.rev` - note revision at time of anchoring
 - `anchor.start_affinity` / `anchor.end_affinity` - boundary mapping policy for inserts at anchor edges
+- `anchor.quote` / `anchor.quote_hash` - stored quote and hash for integrity checks after remapping
 - `status` - `attached`, `stale`, or `detached`
 
 On save, note edits are converted into deterministic text operations and comment ranges are transformed through those operations. Comments touching edited text become `stale`; ranges fully removed become `detached`.
+
+When creating comments, anchor revision must match the note's current `comment_rev` for deterministic placement.
+
+Legacy anchors (`exact`, `start`, `end`) are migrated into the deterministic model when possible; non-mappable legacy anchors remain detached instead of being guessed.
 
 ### Deleting Comments in GUI
 Users can delete existing comments from the comments panel:
