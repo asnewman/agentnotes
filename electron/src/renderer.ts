@@ -160,14 +160,15 @@ async function onNoteSave(noteId: string, content: string): Promise<Note | null>
       return null;
     }
 
+    const isStillCurrentNote = currentNoteId === noteId;
     clearCache();
-    currentNoteId = result.note.id;
-    noteView?.render(result.note);
-    commentsPanel?.render(result.note.comments);
+    if (isStillCurrentNote) {
+      currentNoteId = result.note.id;
+      commentsPanel?.render(result.note.comments);
+    }
 
     const notes = extractNotes(await listNotes());
     noteList?.render(notes);
-    noteList?.selectNote(result.note.id);
 
     return result.note;
   } catch (error) {

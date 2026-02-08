@@ -13,6 +13,9 @@ interface CurrentSelection {
 
 type CommentCreateHandler = (anchor: CommentAnchor, selectedText: string) => void;
 type NoteSaveHandler = (noteId: string, content: string) => Promise<Note | null>;
+interface SaveEditsOptions {
+  keepEditing?: boolean;
+}
 
 export class NoteView {
   private headerContainer: HTMLElement;
@@ -23,8 +26,11 @@ export class NoteView {
   private onCommentCreateCallback: CommentCreateHandler | null;
   private onNoteSaveCallback: NoteSaveHandler | null;
   private currentSelection: CurrentSelection | null;
-  private isEditing: boolean;
   private isSaving: boolean;
+  private autosaveTimer: number | null;
+  private pendingAutosave: boolean;
+  private lastSavedContent: string;
+  private isApplyingContent: boolean;
 
   constructor(headerContainer: HTMLElement, contentContainer: HTMLElement) {
     this.headerContainer = headerContainer;
@@ -35,8 +41,11 @@ export class NoteView {
     this.onCommentCreateCallback = null;
     this.onNoteSaveCallback = null;
     this.currentSelection = null;
-    this.isEditing = false;
     this.isSaving = false;
+    this.autosaveTimer = null;
+    this.pendingAutosave = false;
+    this.lastSavedContent = '';
+    this.isApplyingContent = false;
   }
 
   setOnCommentCreate(callback: CommentCreateHandler): void {
@@ -70,22 +79,24 @@ export class NoteView {
         }),
       ],
       content: '',
-      editable: false,
+      editable: true,
       onSelectionUpdate: ({ editor }: { editor: Editor }) => {
         this.handleSelectionUpdate(editor);
+      },
+      onUpdate: ({ editor }: { editor: Editor }) => {
+        this.handleEditorUpdate(editor);
       },
     });
 
     editorElement.addEventListener('keydown', (event) => {
-      const isSaveShortcut =
-        (event.metaKey || event.ctrlKey) && event.key.toLowerCase() === 's' && this.isEditing;
+      const isSaveShortcut = (event.metaKey || event.ctrlKey) && event.key.toLowerCase() === 's';
 
       if (!isSaveShortcut) {
         return;
       }
 
       event.preventDefault();
-      void this.saveEdits();
+      void this.saveEdits({ keepEditing: true });
     });
 
     document.addEventListener('mousedown', (event) => {
@@ -97,11 +108,6 @@ export class NoteView {
   }
 
   private handleSelectionUpdate(editor: Editor): void {
-    if (this.isEditing) {
-      this.hideSelectionTooltip();
-      return;
-    }
-
     const { from, to } = editor.state.selection;
 
     if (from === to || !this.currentNote) {
@@ -115,18 +121,19 @@ export class NoteView {
       return;
     }
 
+    const content = this.getEditorText();
     const prefixText = editor.state.doc.textBetween(0, from, '\n', '\n');
     const startChar = prefixText.length;
     const endChar = startChar + selectedText.length;
 
-    if (endChar > this.currentNote.content.length) {
+    if (endChar > content.length) {
       this.hideSelectionTooltip();
       return;
     }
 
     try {
       this.currentSelection = {
-        anchor: this.buildAnchor(this.currentNote.content, startChar, endChar),
+        anchor: this.buildAnchor(content, startChar, endChar),
         text: selectedText.trim(),
       };
     } catch {
@@ -197,42 +204,47 @@ export class NoteView {
     window.getSelection()?.removeAllRanges();
   }
 
-  private startEditMode(): void {
-    if (!this.currentNote || !this.editor || this.isSaving) {
+  private async saveEdits(options: SaveEditsOptions = {}): Promise<void> {
+    if (!this.currentNote || !this.editor || !this.onNoteSaveCallback) {
       return;
     }
 
-    this.isEditing = true;
-    this.hideSelectionTooltip();
-    window.getSelection()?.removeAllRanges();
-    this.updateEditorMode();
-    this.renderActions(this.currentNote);
-    this.editor.commands.focus('end');
-  }
-
-  private cancelEdits(): void {
-    if (!this.currentNote || this.isSaving) {
+    const keepEditing = options.keepEditing ?? false;
+    const contentToSave = this.getEditorText();
+    if (contentToSave === this.lastSavedContent) {
       return;
     }
 
-    this.isEditing = false;
-    this.render(this.currentNote);
-  }
-
-  private async saveEdits(): Promise<void> {
-    if (!this.currentNote || !this.editor || !this.onNoteSaveCallback || this.isSaving) {
+    if (this.isSaving) {
+      this.pendingAutosave = true;
       return;
     }
 
     this.isSaving = true;
-    this.renderActions(this.currentNote);
+    this.renderActions();
 
     try {
-      const content = this.getEditorText();
-      const updatedNote = await this.onNoteSaveCallback(this.currentNote.id, content);
+      const noteId = this.currentNote.id;
+      const updatedNote = await this.onNoteSaveCallback(noteId, contentToSave);
 
       if (updatedNote) {
-        this.isEditing = false;
+        if (this.currentNote?.id !== noteId) {
+          return;
+        }
+
+        if (keepEditing) {
+          const latestContent = this.getEditorText();
+          this.lastSavedContent = contentToSave;
+          this.currentNote = { ...updatedNote, content: latestContent };
+          this.renderHeader(this.currentNote);
+
+          if (latestContent !== contentToSave) {
+            this.pendingAutosave = true;
+          }
+          return;
+        }
+
+        this.lastSavedContent = updatedNote.content;
         this.render(updatedNote);
         return;
       }
@@ -241,7 +253,12 @@ export class NoteView {
     } finally {
       this.isSaving = false;
       if (this.currentNote) {
-        this.renderActions(this.currentNote);
+        this.renderActions();
+      }
+
+      if (this.pendingAutosave) {
+        this.pendingAutosave = false;
+        this.scheduleAutosave();
       }
     }
   }
@@ -254,12 +271,46 @@ export class NoteView {
     return this.editor.state.doc.textBetween(0, this.editor.state.doc.content.size, '\n', '\n');
   }
 
-  private updateEditorMode(): void {
-    if (!this.editor) {
+  private handleEditorUpdate(editor: Editor): void {
+    if (!this.currentNote || this.isApplyingContent) {
       return;
     }
 
-    this.editor.setEditable(this.isEditing);
+    const content = editor.state.doc.textBetween(0, editor.state.doc.content.size, '\n', '\n');
+    if (content === this.lastSavedContent) {
+      return;
+    }
+
+    this.scheduleAutosave();
+  }
+
+  private scheduleAutosave(delayMs = 200): void {
+    if (!this.currentNote || !this.editor) {
+      return;
+    }
+
+    this.clearAutosaveTimer();
+    this.autosaveTimer = window.setTimeout(() => {
+      this.autosaveTimer = null;
+
+      if (!this.currentNote || !this.editor) {
+        return;
+      }
+
+      if (this.isSaving) {
+        this.pendingAutosave = true;
+        return;
+      }
+
+      void this.saveEdits({ keepEditing: true });
+    }, delayMs);
+  }
+
+  private clearAutosaveTimer(): void {
+    if (this.autosaveTimer !== null) {
+      window.clearTimeout(this.autosaveTimer);
+      this.autosaveTimer = null;
+    }
   }
 
   render(note: Note | null): void {
@@ -270,12 +321,14 @@ export class NoteView {
 
     const isDifferentNote = this.currentNote?.id !== note.id;
     if (isDifferentNote) {
-      this.isEditing = false;
+      this.clearAutosaveTimer();
       this.isSaving = false;
+      this.pendingAutosave = false;
       this.hideSelectionTooltip();
     }
 
     this.currentNote = note;
+    this.lastSavedContent = note.content;
     this.renderHeader(note);
     this.renderContent(note);
   }
@@ -324,10 +377,10 @@ export class NoteView {
       }
     }
 
-    this.renderActions(note);
+    this.renderActions();
   }
 
-  private renderActions(note: Note): void {
+  private renderActions(): void {
     const actionsElement = this.headerContainer.querySelector<HTMLElement>('.note-actions');
     if (!actionsElement) {
       return;
@@ -335,38 +388,10 @@ export class NoteView {
 
     actionsElement.innerHTML = '';
 
-    if (this.isEditing) {
-      const cancelButton = document.createElement('button');
-      cancelButton.className = 'note-action-btn note-action-cancel';
-      cancelButton.textContent = 'Cancel';
-      cancelButton.disabled = this.isSaving;
-      cancelButton.addEventListener('click', () => {
-        this.cancelEdits();
-      });
-
-      const saveButton = document.createElement('button');
-      saveButton.className = 'note-action-btn note-action-save';
-      saveButton.textContent = this.isSaving ? 'Saving...' : 'Save';
-      saveButton.disabled = this.isSaving;
-      saveButton.addEventListener('click', () => {
-        void this.saveEdits();
-      });
-
-      actionsElement.appendChild(cancelButton);
-      actionsElement.appendChild(saveButton);
-      return;
-    }
-
-    const editButton = document.createElement('button');
-    editButton.className = 'note-action-btn note-action-edit';
-    editButton.textContent = 'Edit';
-    editButton.disabled = this.isSaving;
-    editButton.addEventListener('click', () => {
-      this.startEditMode();
-    });
-
-    editButton.title = `Edit ${note.title}`;
-    actionsElement.appendChild(editButton);
+    const saveStatus = document.createElement('span');
+    saveStatus.className = 'note-save-status';
+    saveStatus.textContent = this.isSaving ? 'Saving...' : 'Autosave on';
+    actionsElement.appendChild(saveStatus);
   }
 
   private renderContent(note: Note): void {
@@ -379,8 +404,13 @@ export class NoteView {
     }
 
     const content = this.markdownToTipTap(note.content);
-    this.editor.commands.setContent(content);
-    this.updateEditorMode();
+    this.isApplyingContent = true;
+    try {
+      this.editor.commands.setContent(content);
+    } finally {
+      this.isApplyingContent = false;
+    }
+    this.editor.setEditable(true);
     this.applyHighlights(note);
   }
 
@@ -404,10 +434,11 @@ export class NoteView {
   }
 
   private applyHighlights(note: Note): void {
-    if (!this.editor || note.comments.length === 0 || this.isEditing) {
+    if (!this.editor || note.comments.length === 0) {
       return;
     }
 
+    const selection = this.editor.state.selection;
     const ranges = getAllHighlightRanges(note.content, note.comments);
     if (ranges.length === 0) {
       return;
@@ -425,7 +456,11 @@ export class NoteView {
       }
     }
 
-    this.editor.commands.setTextSelection(1);
+    try {
+      this.editor.commands.setTextSelection({ from: selection.from, to: selection.to });
+    } catch {
+      console.debug('Could not restore selection after applying highlights');
+    }
   }
 
   clear(): void {
@@ -433,9 +468,12 @@ export class NoteView {
   }
 
   private renderEmpty(): void {
+    this.clearAutosaveTimer();
     this.currentNote = null;
-    this.isEditing = false;
     this.isSaving = false;
+    this.pendingAutosave = false;
+    this.lastSavedContent = '';
+    this.isApplyingContent = false;
     this.hideSelectionTooltip();
 
     const titleElement = this.headerContainer.querySelector<HTMLElement>('.note-title');
@@ -468,6 +506,8 @@ export class NoteView {
   }
 
   destroy(): void {
+    this.clearAutosaveTimer();
+
     if (this.editor) {
       this.editor.destroy();
       this.editor = null;
