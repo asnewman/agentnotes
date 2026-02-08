@@ -77,6 +77,23 @@ export async function addComment(noteId, content, author, startChar, endChar) {
 }
 
 /**
+ * Delete a comment from a note
+ * @param {string} noteId - The note ID (ULID)
+ * @param {string} commentId - The comment ID (ULID)
+ * @returns {Promise<Object>} Result with success status and updated note
+ */
+export async function deleteComment(noteId, commentId) {
+  const result = await window.api.deleteComment(noteId, commentId);
+
+  // Clear cache if comment was deleted successfully
+  if (result.success) {
+    clearCache();
+  }
+
+  return result;
+}
+
+/**
  * Format a date for display
  * @param {string} isoDate - ISO date string
  * @returns {string} Formatted date string

@@ -261,3 +261,54 @@ ipcMain.handle('notes:addComment', async (event, { noteId, content, author, star
     return { success: false, error: err.message };
   }
 });
+
+// IPC handler: Delete a comment from a note
+ipcMain.handle('notes:deleteComment', async (event, { noteId, commentId }) => {
+  const notesDir = getNotesDir();
+
+  if (!notesDir || !fs.existsSync(notesDir)) {
+    return { success: false, error: 'Notes directory not found' };
+  }
+
+  if (!commentId) {
+    return { success: false, error: 'Comment ID is required' };
+  }
+
+  try {
+    const files = getAllMarkdownFiles(notesDir);
+
+    // Find the note file by ID
+    for (const { fullPath, relativePath } of files) {
+      const fileContent = fs.readFileSync(fullPath, 'utf-8');
+      const { data, content: markdownContent } = matter(fileContent);
+
+      if (data.id === noteId) {
+        const comments = Array.isArray(data.comments) ? data.comments : [];
+        const commentIndex = comments.findIndex(comment => comment && comment.id === commentId);
+
+        if (commentIndex === -1) {
+          return { success: false, error: 'Comment not found' };
+        }
+
+        comments.splice(commentIndex, 1);
+        data.comments = comments;
+        data.updated = new Date().toISOString();
+
+        // Write the file back
+        const updatedFile = matter.stringify(markdownContent, data);
+        fs.writeFileSync(fullPath, updatedFile, 'utf-8');
+
+        // Return the updated note
+        return {
+          success: true,
+          note: parseNoteFile(fullPath, relativePath)
+        };
+      }
+    }
+
+    return { success: false, error: 'Note not found' };
+  } catch (err) {
+    console.error('Error deleting comment:', err);
+    return { success: false, error: err.message };
+  }
+});

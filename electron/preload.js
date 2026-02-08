@@ -11,6 +11,10 @@ contextBridge.exposeInMainWorld('api', {
   addComment: (noteId, content, author, startChar, endChar) =>
     ipcRenderer.invoke('notes:addComment', { noteId, content, author, startChar, endChar }),
 
+  // Delete a comment from a note
+  deleteComment: (noteId, commentId) =>
+    ipcRenderer.invoke('notes:deleteComment', { noteId, commentId }),
+
   // Directory management
   getDirectory: () => ipcRenderer.invoke('directory:get'),
   selectDirectory: () => ipcRenderer.invoke('directory:select'),

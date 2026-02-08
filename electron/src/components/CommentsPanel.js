@@ -27,63 +27,6 @@ function getTextPreview(content, startChar, endChar, maxLength = 50) {
 }
 
 /**
- * Create a comment card element
- * @param {Object} comment - The comment object
- * @param {string} noteContent - The note's raw content (for text preview)
- * @returns {HTMLElement} The comment card element
- */
-function createCommentCard(comment, noteContent) {
-  const card = document.createElement('div');
-  card.className = 'comment-card';
-
-  // Header with author and date
-  const header = document.createElement('div');
-  header.className = 'comment-header';
-
-  const author = document.createElement('span');
-  author.className = 'comment-author';
-  author.textContent = comment.author || 'Anonymous';
-
-  const date = document.createElement('span');
-  date.className = 'comment-date';
-  date.textContent = formatDateTime(comment.created);
-
-  header.appendChild(author);
-  header.appendChild(date);
-  card.appendChild(header);
-
-  // Line or character range reference badge if present
-  if (comment.line && comment.line > 0) {
-    const lineBadge = document.createElement('div');
-    lineBadge.className = 'comment-line';
-    lineBadge.textContent = `Line ${comment.line}`;
-    card.appendChild(lineBadge);
-  } else if (comment.startChar !== undefined && comment.endChar !== undefined && comment.endChar > comment.startChar) {
-    const rangeBadge = document.createElement('div');
-    rangeBadge.className = 'comment-line';
-    rangeBadge.textContent = `Chars ${comment.startChar}-${comment.endChar}`;
-    card.appendChild(rangeBadge);
-
-    // Add text preview for character-based comments
-    const previewText = getTextPreview(noteContent, comment.startChar, comment.endChar);
-    if (previewText) {
-      const preview = document.createElement('div');
-      preview.className = 'comment-preview';
-      preview.textContent = `"${previewText}"`;
-      card.appendChild(preview);
-    }
-  }
-
-  // Content
-  const content = document.createElement('div');
-  content.className = 'comment-content';
-  content.textContent = comment.content;
-  card.appendChild(content);
-
-  return card;
-}
-
-/**
  * CommentsPanel class - manages the comments panel
  */
 export class CommentsPanel {
@@ -96,6 +39,8 @@ export class CommentsPanel {
     this.noteContent = '';
     this.pendingComment = null;
     this.onCommentSubmitCallback = null;
+    this.onCommentDeleteCallback = null;
+    this.deletingCommentIds = new Set();
   }
 
   /**
@@ -104,6 +49,14 @@ export class CommentsPanel {
    */
   setOnCommentSubmit(callback) {
     this.onCommentSubmitCallback = callback;
+  }
+
+  /**
+   * Set callback for when a comment is deleted
+   * @param {Function} callback - Callback(commentId)
+   */
+  setOnCommentDelete(callback) {
+    this.onCommentDeleteCallback = callback;
   }
 
   /**
@@ -149,6 +102,110 @@ export class CommentsPanel {
     }
 
     this.pendingComment = null;
+  }
+
+  /**
+   * Handle deleting a comment
+   * @param {string} commentId - The comment ID
+   */
+  async handleDeleteComment(commentId) {
+    if (!commentId || !this.onCommentDeleteCallback || this.deletingCommentIds.has(commentId)) {
+      return;
+    }
+
+    const shouldDelete = window.confirm('Delete this comment?');
+    if (!shouldDelete) {
+      return;
+    }
+
+    this.deletingCommentIds.add(commentId);
+    if (this.pendingComment) {
+      this.renderWithPending();
+    } else {
+      this.render(this.comments, this.noteContent);
+    }
+
+    try {
+      await this.onCommentDeleteCallback(commentId);
+    } finally {
+      this.deletingCommentIds.delete(commentId);
+      if (this.pendingComment) {
+        this.renderWithPending();
+      } else {
+        this.render(this.comments, this.noteContent);
+      }
+    }
+  }
+
+  /**
+   * Create a comment card element
+   * @param {Object} comment - The comment object
+   * @returns {HTMLElement} The comment card element
+   */
+  createCommentCard(comment) {
+    const card = document.createElement('div');
+    card.className = 'comment-card';
+
+    // Header with author and actions
+    const header = document.createElement('div');
+    header.className = 'comment-header';
+
+    const author = document.createElement('span');
+    author.className = 'comment-author';
+    author.textContent = comment.author || 'Anonymous';
+
+    const actions = document.createElement('div');
+    actions.className = 'comment-actions';
+
+    const date = document.createElement('span');
+    date.className = 'comment-date';
+    date.textContent = formatDateTime(comment.created);
+    actions.appendChild(date);
+
+    if (comment.id) {
+      const isDeleting = this.deletingCommentIds.has(comment.id);
+      const deleteBtn = document.createElement('button');
+      deleteBtn.type = 'button';
+      deleteBtn.className = 'comment-delete-btn';
+      deleteBtn.textContent = isDeleting ? 'Deleting...' : 'Delete';
+      deleteBtn.disabled = isDeleting;
+      deleteBtn.addEventListener('click', () => this.handleDeleteComment(comment.id));
+      actions.appendChild(deleteBtn);
+    }
+
+    header.appendChild(author);
+    header.appendChild(actions);
+    card.appendChild(header);
+
+    // Line or character range reference badge if present
+    if (comment.line && comment.line > 0) {
+      const lineBadge = document.createElement('div');
+      lineBadge.className = 'comment-line';
+      lineBadge.textContent = `Line ${comment.line}`;
+      card.appendChild(lineBadge);
+    } else if (comment.startChar !== undefined && comment.endChar !== undefined && comment.endChar > comment.startChar) {
+      const rangeBadge = document.createElement('div');
+      rangeBadge.className = 'comment-line';
+      rangeBadge.textContent = `Chars ${comment.startChar}-${comment.endChar}`;
+      card.appendChild(rangeBadge);
+
+      // Add text preview for character-based comments
+      const previewText = getTextPreview(this.noteContent, comment.startChar, comment.endChar);
+      if (previewText) {
+        const preview = document.createElement('div');
+        preview.className = 'comment-preview';
+        preview.textContent = `"${previewText}"`;
+        card.appendChild(preview);
+      }
+    }
+
+    // Content
+    const content = document.createElement('div');
+    content.className = 'comment-content';
+    content.textContent = comment.content;
+    card.appendChild(content);
+
+    return card;
   }
 
   /**
@@ -253,7 +310,7 @@ export class CommentsPanel {
     });
 
     sortedComments.forEach(comment => {
-      this.container.appendChild(createCommentCard(comment, this.noteContent));
+      this.container.appendChild(this.createCommentCard(comment));
     });
   }
 
@@ -294,7 +351,7 @@ export class CommentsPanel {
     });
 
     sortedComments.forEach(comment => {
-      this.container.appendChild(createCommentCard(comment, this.noteContent));
+      this.container.appendChild(this.createCommentCard(comment));
     });
   }
 
@@ -303,6 +360,7 @@ export class CommentsPanel {
    */
   clear() {
     this.comments = [];
+    this.deletingCommentIds.clear();
     this.container.innerHTML = '<p class="empty-state">No comments</p>';
   }
 }

@@ -2,7 +2,7 @@
  * AgentNotes Electron App - Renderer Process Entry Point
  */
 
-import { listNotes, addComment, clearCache, getDirectory, selectDirectory } from './lib/noteStore.js';
+import { listNotes, addComment, deleteComment, clearCache, getDirectory, selectDirectory } from './lib/noteStore.js';
 import { NoteList } from './components/NoteList.js';
 import { NoteView } from './components/NoteView.js';
 import { CommentsPanel } from './components/CommentsPanel.js';
@@ -131,6 +131,38 @@ async function onCommentSubmit(content, startChar, endChar) {
 }
 
 /**
+ * Handle comment deletion
+ * @param {string} commentId - The comment ID
+ */
+async function onCommentDelete(commentId) {
+  if (!currentNoteId) {
+    console.error('No note selected');
+    return;
+  }
+
+  try {
+    const result = await deleteComment(currentNoteId, commentId);
+
+    if (result.success && result.note) {
+      // Clear cache and re-render with updated note
+      clearCache();
+      noteView.render(result.note);
+      commentsPanel.render(result.note.comments, result.note.content);
+
+      // Update the note list to reflect changes
+      const notesResult = await listNotes();
+      const notes = extractNotes(notesResult);
+      noteList.render(notes);
+      noteList.selectNote(currentNoteId);
+    } else {
+      console.error('Failed to delete comment:', result.error);
+    }
+  } catch (error) {
+    console.error('Error deleting comment:', error);
+  }
+}
+
+/**
  * Update the directory indicator in the title bar
  * @param {string} path - The directory path
  */
@@ -227,6 +259,7 @@ async function init() {
   // Wire up comment creation callbacks
   noteView.setOnCommentCreate(onCommentCreate);
   commentsPanel.setOnCommentSubmit(onCommentSubmit);
+  commentsPanel.setOnCommentDelete(onCommentDelete);
 
   // Check if directory is already configured
   try {

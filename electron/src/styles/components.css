@@ -319,6 +319,12 @@
   margin-bottom: 8px;
 }
 
+.comment-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
 .comment-author {
   font-weight: 600;
   font-size: 13px;
@@ -344,6 +350,28 @@
   font-size: 13px;
   line-height: 1.5;
   color: var(--text-secondary);
+}
+
+.comment-delete-btn {
+  background: transparent;
+  border: 1px solid var(--border-color);
+  border-radius: 4px;
+  color: #c95e6b;
+  cursor: pointer;
+  font-size: 11px;
+  line-height: 1;
+  padding: 4px 8px;
+  transition: background-color 0.15s ease, border-color 0.15s ease;
+}
+
+.comment-delete-btn:hover:not(:disabled) {
+  background-color: rgba(201, 94, 107, 0.12);
+  border-color: rgba(201, 94, 107, 0.4);
+}
+
+.comment-delete-btn:disabled {
+  cursor: not-allowed;
+  opacity: 0.6;
 }
 
 /* Selection Tooltip */
