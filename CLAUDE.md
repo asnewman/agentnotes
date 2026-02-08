@@ -44,7 +44,7 @@ Notes can be organized in subdirectories:
 └── 2024-01-15-root-level-note.md
 ```
 
-Each note has YAML frontmatter with: id (ULID), title, tags, created, updated, source, priority, comment_rev, comments.
+Each note has YAML frontmatter with: id (ULID), title, tags, created, updated, source, comment_rev, comments.
 
 The CLI operates relative to the current working directory - each project can have its own independent notes.
 
@@ -127,7 +127,7 @@ The `edit` command modifies notes directly from the command line (no editor requ
 ./agentnotes edit myNote --add-tags "important,urgent"
 ./agentnotes edit myNote --remove-tags "draft"
 ./agentnotes edit myNote --tags "tag1,tag2"  # replaces all tags
-./agentnotes edit myNote --priority 5 --source "api"
+./agentnotes edit myNote --source "api"
 ```
 
 ### Content editing

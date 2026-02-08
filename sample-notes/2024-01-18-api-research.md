@@ -5,29 +5,44 @@ tags:
   - research
   - api
   - golang
-created: 2024-01-18T09:00:00Z
-updated: 2024-01-18T16:45:00Z
+created: 2024-01-18T09:00:00.000Z
+updated: '2026-02-08T18:59:44.440Z'
 source: user
-priority: 2
 comments:
   - id: 01HQXM3A1B2C3D4E5F6G7H8J9M
     author: claude
-    start_char: 25
-    end_char: 75
-    created: 2024-01-18T10:30:00Z
+    created: '2026-02-08T18:59:44.440Z'
     content: The Cobra library is well-maintained and widely used. Good choice for CLI.
+    status: detached
+    anchor:
+      from: 0
+      to: 0
+      rev: 2
+      start_affinity: after
+      end_affinity: before
   - id: 01HQXM4B2C3D4E5F6G7H8J9KN
     author: user
-    start_char: 170
-    end_char: 210
-    created: 2024-01-18T11:00:00Z
+    created: '2026-02-08T18:59:44.440Z'
     content: Also look into urfave/cli as an alternative.
+    status: detached
+    anchor:
+      from: 0
+      to: 0
+      rev: 2
+      start_affinity: after
+      end_affinity: before
   - id: 01HQXM5C3D4E5F6G7H8J9KLP
     author: claude
-    start_char: 275
-    end_char: 340
-    created: 2024-01-18T14:00:00Z
+    created: '2026-02-08T18:59:44.440Z'
     content: YAML is more readable but JSON would be faster to parse.
+    status: detached
+    anchor:
+      from: 0
+      to: 0
+      rev: 2
+      start_affinity: after
+      end_affinity: before
+comment_rev: 2
 ---
 # API Research Notes
 
@@ -45,9 +60,9 @@ comments:
 
 | Format | Readability | Parse Speed | Ecosystem |
 |--------|-------------|-------------|-----------|
-| YAML   | Excellent   | Moderate    | Good      |
-| JSON   | Good        | Fast        | Excellent |
-| TOML   | Good        | Moderate    | Limited   |
+| YAML | Excellent | Moderate | Good |
+| JSON | Good | Fast | Excellent |
+| TOML | Good | Moderate | Limited |
 
 ## Decision
 

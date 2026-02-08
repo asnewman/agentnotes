@@ -4,7 +4,7 @@ import StarterKit from '@tiptap/starter-kit';
 import { buildAnchorFromRange, getAllHighlightRanges } from '../lib/highlighter';
 import { formatDate, formatDateTime } from '../lib/noteStore';
 import type { CommentAnchor, Note } from '../types';
-import { createPriorityBadge, createTagChip } from './TagChip';
+import { createTagChip } from './TagChip';
 
 interface CurrentSelection {
   anchor: CommentAnchor;
@@ -475,13 +475,6 @@ export class NoteView {
     }
 
     tagsElement.innerHTML = '';
-
-    if (note.priority > 0) {
-      const badge = createPriorityBadge(note.priority);
-      if (badge) {
-        tagsElement.appendChild(badge);
-      }
-    }
 
     for (const tag of note.tags) {
       tagsElement.appendChild(createTagChip(tag, (tagToRemove) => this.handleTagRemove(tagToRemove)));

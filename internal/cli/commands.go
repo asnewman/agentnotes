@@ -55,7 +55,6 @@ Simple, portable, human and AI-agent readable.`,
 // addCmd creates the add command
 func (app *App) addCmd() *cobra.Command {
 	var tags string
-	var priority int
 
 	cmd := &cobra.Command{
 		Use:   "add <title>",
@@ -73,7 +72,7 @@ func (app *App) addCmd() *cobra.Command {
 				}
 			}
 
-			note := notes.NewNote(title, tagList, priority)
+			note := notes.NewNote(title, tagList)
 
 			// Check if stdin has data
 			stat, _ := os.Stdin.Stat()
@@ -106,7 +105,6 @@ func (app *App) addCmd() *cobra.Command {
 	}
 
 	cmd.Flags().StringVar(&tags, "tags", "", "Comma-separated list of tags")
-	cmd.Flags().IntVar(&priority, "priority", 0, "Note priority (1-10)")
 
 	return cmd
 }
@@ -148,7 +146,7 @@ func (app *App) listCmd() *cobra.Command {
 
 	cmd.Flags().StringVar(&tags, "tags", "", "Filter by tags (comma-separated)")
 	cmd.Flags().IntVar(&limit, "limit", 20, "Maximum number of notes to show")
-	cmd.Flags().StringVar(&sortBy, "sort", "created", "Sort by: created, updated, priority, title")
+	cmd.Flags().StringVar(&sortBy, "sort", "created", "Sort by: created, updated, title")
 
 	return cmd
 }
@@ -244,7 +242,6 @@ func (app *App) editCmd() *cobra.Command {
 		replaceLine string
 		deleteLine  int
 		source      string
-		priority    int
 	)
 
 	cmd := &cobra.Command{
@@ -334,19 +331,6 @@ Examples:
 				changed = true
 			}
 
-			// Apply priority change
-			if cmd.Flags().Changed("priority") {
-				if priority < -1 || priority > 10 {
-					return fmt.Errorf("priority must be between 0 and 10 (or -1 to clear)")
-				}
-				if priority == -1 {
-					note.Priority = 0
-				} else {
-					note.Priority = priority
-				}
-				changed = true
-			}
-
 			// Apply content changes
 			if stdinHasData {
 				scanner := bufio.NewScanner(os.Stdin)
@@ -427,7 +411,6 @@ Examples:
 	cmd.Flags().StringVarP(&addTags, "add-tags", "a", "", "Add tags (comma-separated)")
 	cmd.Flags().StringVarP(&removeTags, "remove-tags", "r", "", "Remove tags (comma-separated)")
 	cmd.Flags().StringVarP(&source, "source", "s", "", "Set source field")
-	cmd.Flags().IntVarP(&priority, "priority", "p", 0, "Set priority (0-10, or -1 to clear)")
 
 	// Content flags
 	cmd.Flags().StringVarP(&content, "content", "c", "", "Replace entire content")

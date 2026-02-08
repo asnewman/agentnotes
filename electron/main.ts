@@ -36,7 +36,6 @@ interface FrontmatterData extends Record<string, unknown> {
   created?: unknown;
   updated?: unknown;
   source?: unknown;
-  priority?: unknown;
   comment_rev?: unknown;
   comments?: unknown;
 }
@@ -399,7 +398,6 @@ function parseNoteFile(filePath: string, relativePath = ''): Note | null {
       created: toIsoDate(data.created, fallbackIso),
       updated: toIsoDate(data.updated, fallbackIso),
       source: toStringValue(data.source),
-      priority: toNumberValue(data.priority),
       commentRev,
       comments: comments.map((comment) => ({
         ...comment,

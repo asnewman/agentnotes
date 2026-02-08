@@ -8,7 +8,6 @@ tags:
 created: 2024-01-15T10:30:00Z
 updated: 2026-02-02T07:23:52.931749Z
 source: user
-priority: 3
 comments:
     - id: 01HQXK6A1B2C3D4E5F6G7H8J9K
       author: claude

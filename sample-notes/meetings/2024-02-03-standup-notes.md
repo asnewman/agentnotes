@@ -8,7 +8,6 @@ tags:
 created: 2024-02-03T09:00:00.000Z
 updated: '2026-02-08T16:03:17.369Z'
 source: meeting
-priority: 2
 comments:
   - id: 01KGSKTQSHGSRJ558BCEZNM95E
     author: ''

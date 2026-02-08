@@ -27,7 +27,6 @@ export interface Note {
   created: string;
   updated: string;
   source: string;
-  priority: number;
   commentRev: number;
   comments: NoteComment[];
   content: string;

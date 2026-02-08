@@ -1,4 +1,3 @@
-import { formatDateTime } from '../lib/noteStore';
 import type { CommentAnchor, NoteComment } from '../types';
 
 interface PendingComment {
@@ -98,39 +97,6 @@ export class CommentsPanel {
     const card = document.createElement('div');
     card.className = 'comment-card';
 
-    const header = document.createElement('div');
-    header.className = 'comment-header';
-    header.classList.add('comment-header-actions-only');
-
-    const actions = document.createElement('div');
-    actions.className = 'comment-actions';
-
-    const date = document.createElement('span');
-    date.className = 'comment-date';
-    date.textContent = formatDateTime(comment.created);
-    actions.appendChild(date);
-
-    const statusBadge = document.createElement('span');
-    statusBadge.className = 'comment-line-badge';
-    statusBadge.textContent = comment.status;
-    actions.appendChild(statusBadge);
-
-    if (comment.id) {
-      const isDeleting = this.deletingCommentIds.has(comment.id);
-      const deleteButton = document.createElement('button');
-      deleteButton.type = 'button';
-      deleteButton.className = 'comment-delete-btn';
-      deleteButton.textContent = isDeleting ? 'Deleting...' : 'Delete';
-      deleteButton.disabled = isDeleting;
-      deleteButton.addEventListener('click', () => {
-        void this.handleDeleteComment(comment.id);
-      });
-      actions.appendChild(deleteButton);
-    }
-
-    header.append(actions);
-    card.appendChild(header);
-
     const previewText = comment.anchor.quote || '';
     if (previewText) {
       const preview = document.createElement('div');
@@ -143,6 +109,19 @@ export class CommentsPanel {
     content.className = 'comment-content';
     content.textContent = comment.content;
     card.appendChild(content);
+
+    if (comment.id) {
+      const isDeleting = this.deletingCommentIds.has(comment.id);
+      const deleteButton = document.createElement('button');
+      deleteButton.type = 'button';
+      deleteButton.className = 'comment-delete-btn';
+      deleteButton.textContent = isDeleting ? 'Removing...' : 'Delete';
+      deleteButton.disabled = isDeleting;
+      deleteButton.addEventListener('click', () => {
+        void this.handleDeleteComment(comment.id);
+      });
+      card.appendChild(deleteButton);
+    }
 
     return card;
   }
@@ -157,17 +136,6 @@ export class CommentsPanel {
 
     const card = document.createElement('div');
     card.className = 'comment-card comment-card-pending';
-
-    const header = document.createElement('div');
-    header.className = 'comment-header';
-    header.classList.add('comment-header-pending');
-
-    const anchorBadge = document.createElement('span');
-    anchorBadge.className = 'comment-line-badge';
-    anchorBadge.textContent = 'Anchored text';
-
-    header.append(anchorBadge);
-    card.appendChild(header);
 
     const preview = document.createElement('div');
     preview.className = 'comment-preview';

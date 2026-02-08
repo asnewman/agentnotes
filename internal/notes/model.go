@@ -63,24 +63,22 @@ type Note struct {
 	Created    time.Time `yaml:"created"`
 	Updated    time.Time `yaml:"updated"`
 	Source     string    `yaml:"source,omitempty"`
-	Priority   int       `yaml:"priority,omitempty"`
 	CommentRev int       `yaml:"comment_rev,omitempty"`
 	Comments   []Comment `yaml:"comments,omitempty"`
 	Content    string    `yaml:"-"` // Not part of frontmatter
 }
 
 // NewNote creates a new note with generated ID and timestamps
-func NewNote(title string, tags []string, priority int) *Note {
+func NewNote(title string, tags []string) *Note {
 	now := time.Now().UTC()
 	return &Note{
-		ID:       ulid.Make().String(),
-		Title:    title,
-		Tags:     tags,
-		Created:  now,
-		Updated:  now,
-		Source:   "user",
-		Priority: priority,
-		Content:  fmt.Sprintf("# %s\n\n", title),
+		ID:      ulid.Make().String(),
+		Title:   title,
+		Tags:    tags,
+		Created: now,
+		Updated: now,
+		Source:  "user",
+		Content: fmt.Sprintf("# %s\n\n", title),
 	}
 }
 

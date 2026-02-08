@@ -9,10 +9,9 @@ import (
 type SortField string
 
 const (
-	SortByCreated  SortField = "created"
-	SortByUpdated  SortField = "updated"
-	SortByPriority SortField = "priority"
-	SortByTitle    SortField = "title"
+	SortByCreated SortField = "created"
+	SortByUpdated SortField = "updated"
+	SortByTitle   SortField = "title"
 )
 
 // SearchOptions configures search behavior
@@ -120,12 +119,6 @@ func sortNotes(notes []*Note, sortBy SortField, reverse bool) {
 			less = notes[i].Created.After(notes[j].Created)
 		case SortByUpdated:
 			less = notes[i].Updated.After(notes[j].Updated)
-		case SortByPriority:
-			if notes[i].Priority == notes[j].Priority {
-				less = notes[i].Created.After(notes[j].Created)
-			} else {
-				less = notes[i].Priority > notes[j].Priority
-			}
 		case SortByTitle:
 			less = strings.ToLower(notes[i].Title) < strings.ToLower(notes[j].Title)
 		default:

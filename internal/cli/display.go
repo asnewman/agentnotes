@@ -40,11 +40,8 @@ func FormatNoteList(noteList []*notes.Note) string {
 		sb.WriteString(Dim + " [" + note.ID[:8] + "...]" + Reset)
 		sb.WriteString("\n")
 
-		// Date and priority
+		// Date
 		sb.WriteString(Dim + "  " + note.Created.Format("2006-01-02 15:04") + Reset)
-		if note.Priority > 0 {
-			sb.WriteString(Yellow + fmt.Sprintf(" (priority: %d)", note.Priority) + Reset)
-		}
 		sb.WriteString("\n")
 
 		// Tags
@@ -76,10 +73,6 @@ func FormatNoteDetail(note *notes.Note) string {
 	sb.WriteString(Dim + "ID:       " + Reset + note.ID + "\n")
 	sb.WriteString(Dim + "Created:  " + Reset + note.Created.Format("2006-01-02 15:04:05 MST") + "\n")
 	sb.WriteString(Dim + "Updated:  " + Reset + note.Updated.Format("2006-01-02 15:04:05 MST") + "\n")
-
-	if note.Priority > 0 {
-		sb.WriteString(Dim + "Priority: " + Reset + fmt.Sprintf("%d", note.Priority) + "\n")
-	}
 
 	if len(note.Tags) > 0 {
 		sb.WriteString(Dim + "Tags:     " + Reset)
@@ -119,10 +112,6 @@ func FormatNoteDetailWithComments(note *notes.Note) string {
 	sb.WriteString(Dim + "ID:       " + Reset + note.ID + "\n")
 	sb.WriteString(Dim + "Created:  " + Reset + note.Created.Format("2006-01-02 15:04:05 MST") + "\n")
 	sb.WriteString(Dim + "Updated:  " + Reset + note.Updated.Format("2006-01-02 15:04:05 MST") + "\n")
-
-	if note.Priority > 0 {
-		sb.WriteString(Dim + "Priority: " + Reset + fmt.Sprintf("%d", note.Priority) + "\n")
-	}
 
 	if len(note.Tags) > 0 {
 		sb.WriteString(Dim + "Tags:     " + Reset)
