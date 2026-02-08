@@ -6,8 +6,31 @@
 let notesCache = null;
 
 /**
+ * Get the configured notes directory
+ * @returns {Promise<string|null>} The directory path or null
+ */
+export async function getDirectory() {
+  return window.api.getDirectory();
+}
+
+/**
+ * Open directory picker and save selection
+ * @returns {Promise<string|null>} The selected directory path or null
+ */
+export async function selectDirectory() {
+  const path = await window.api.selectDirectory();
+
+  // Clear cache when directory changes
+  if (path) {
+    clearCache();
+  }
+
+  return path;
+}
+
+/**
  * Get all notes sorted by date (newest first)
- * @returns {Promise<Array>} Array of note objects
+ * @returns {Promise<Object>} Object with notes array and noDirectory flag
  */
 export async function listNotes() {
   if (notesCache) {

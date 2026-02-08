@@ -11,6 +11,10 @@ contextBridge.exposeInMainWorld('api', {
   addComment: (noteId, content, author, startChar, endChar) =>
     ipcRenderer.invoke('notes:addComment', { noteId, content, author, startChar, endChar }),
 
+  // Directory management
+  getDirectory: () => ipcRenderer.invoke('directory:get'),
+  selectDirectory: () => ipcRenderer.invoke('directory:select'),
+
   // Window controls
   windowMinimize: () => ipcRenderer.send('window:minimize'),
   windowMaximize: () => ipcRenderer.send('window:maximize'),

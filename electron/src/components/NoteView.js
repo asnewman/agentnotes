@@ -326,6 +326,13 @@ export class NoteView {
   }
 
   /**
+   * Clear the note view (alias for renderEmpty)
+   */
+  clear() {
+    this.renderEmpty();
+  }
+
+  /**
    * Render empty state
    */
   renderEmpty() {

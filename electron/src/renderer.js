@@ -2,7 +2,7 @@
  * AgentNotes Electron App - Renderer Process Entry Point
  */
 
-import { listNotes, addComment, clearCache } from './lib/noteStore.js';
+import { listNotes, addComment, clearCache, getDirectory, selectDirectory } from './lib/noteStore.js';
 import { NoteList } from './components/NoteList.js';
 import { NoteView } from './components/NoteView.js';
 import { CommentsPanel } from './components/CommentsPanel.js';
@@ -12,6 +12,30 @@ let noteList = null;
 let noteView = null;
 let commentsPanel = null;
 let currentNoteId = null;
+
+// DOM elements for directory selection
+let directoryOverlay = null;
+let appElement = null;
+let titleBarDirectory = null;
+let directoryPath = null;
+
+/**
+ * Normalize notes:list responses to a notes array.
+ * Supports both legacy array payloads and object payloads ({ notes, noDirectory }).
+ * @param {Array|Object} result
+ * @returns {Array}
+ */
+function extractNotes(result) {
+  if (Array.isArray(result)) {
+    return result;
+  }
+
+  if (result && Array.isArray(result.notes)) {
+    return result.notes;
+  }
+
+  return [];
+}
 
 /**
  * Initialize the custom title bar
@@ -94,7 +118,8 @@ async function onCommentSubmit(content, startChar, endChar) {
       commentsPanel.render(result.note.comments, result.note.content);
 
       // Update the note list to reflect changes
-      const notes = await listNotes();
+      const notesResult = await listNotes();
+      const notes = extractNotes(notesResult);
       noteList.render(notes);
       noteList.selectNote(currentNoteId);
     } else {
@@ -106,13 +131,89 @@ async function onCommentSubmit(content, startChar, endChar) {
 }
 
 /**
+ * Update the directory indicator in the title bar
+ * @param {string} path - The directory path
+ */
+function updateDirectoryIndicator(path) {
+  if (!path) {
+    titleBarDirectory.classList.add('hidden');
+    return;
+  }
+
+  // Show just the folder name, not full path
+  const folderName = path.split('/').pop() || path;
+  directoryPath.textContent = folderName;
+  directoryPath.title = path; // Show full path on hover
+  titleBarDirectory.classList.remove('hidden');
+}
+
+/**
+ * Handle directory selection
+ */
+async function handleSelectDirectory() {
+  const path = await selectDirectory();
+
+  if (path) {
+    // Hide overlay, show app
+    directoryOverlay.classList.add('hidden');
+    appElement.classList.remove('hidden');
+
+    // Update title bar indicator
+    updateDirectoryIndicator(path);
+
+    // Clear cache and reload notes
+    clearCache();
+    await loadNotes();
+  }
+}
+
+/**
+ * Load and display notes
+ */
+async function loadNotes() {
+  const noteListContainer = document.getElementById('noteList');
+
+  try {
+    const result = await listNotes();
+    const notes = extractNotes(result);
+
+    noteList.render(notes);
+
+    // Auto-select first note if available
+    if (notes.length > 0) {
+      noteList.selectNote(notes[0].id);
+    } else {
+      // Clear the note view when no notes
+      noteView.clear();
+      commentsPanel.clear();
+    }
+  } catch (error) {
+    console.error('Error loading notes:', error);
+    noteListContainer.innerHTML = '<p class="empty-state">Error loading notes</p>';
+  }
+}
+
+/**
  * Initialize the application
  */
 async function init() {
   // Initialize title bar
   initTitleBar();
 
-  // Get DOM elements
+  // Get directory-related DOM elements
+  directoryOverlay = document.getElementById('directoryOverlay');
+  appElement = document.querySelector('.app');
+  titleBarDirectory = document.getElementById('titleBarDirectory');
+  directoryPath = document.getElementById('directoryPath');
+
+  // Set up directory selection button handlers
+  const selectDirectoryBtn = document.getElementById('selectDirectoryBtn');
+  const changeDirectoryBtn = document.getElementById('changeDirectoryBtn');
+
+  selectDirectoryBtn.addEventListener('click', handleSelectDirectory);
+  changeDirectoryBtn.addEventListener('click', handleSelectDirectory);
+
+  // Get DOM elements for note components
   const noteListContainer = document.getElementById('noteList');
   const noteHeaderContainer = document.getElementById('noteHeader');
   const noteContentContainer = document.getElementById('noteContent');
@@ -127,18 +228,30 @@ async function init() {
   noteView.setOnCommentCreate(onCommentCreate);
   commentsPanel.setOnCommentSubmit(onCommentSubmit);
 
-  // Load and display notes
+  // Check if directory is already configured
   try {
-    const notes = await listNotes();
-    noteList.render(notes);
+    const currentDirectory = await getDirectory();
 
-    // Auto-select first note if available
-    if (notes.length > 0) {
-      noteList.selectNote(notes[0].id);
+    if (!currentDirectory) {
+      // No directory configured - show overlay, hide app
+      directoryOverlay.classList.remove('hidden');
+      appElement.classList.add('hidden');
+    } else {
+      // Directory configured - hide overlay, show app
+      directoryOverlay.classList.add('hidden');
+      appElement.classList.remove('hidden');
+
+      // Update title bar indicator
+      updateDirectoryIndicator(currentDirectory);
+
+      // Load notes
+      await loadNotes();
     }
   } catch (error) {
-    console.error('Error loading notes:', error);
-    noteListContainer.innerHTML = '<p class="empty-state">Error loading notes</p>';
+    console.error('Error checking directory:', error);
+    // Show directory picker on error
+    directoryOverlay.classList.remove('hidden');
+    appElement.classList.add('hidden');
   }
 }
 

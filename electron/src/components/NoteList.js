@@ -186,6 +186,13 @@ export class NoteList {
    * @param {Array} notes - Array of note objects
    */
   render(notes) {
+    if (!Array.isArray(notes)) {
+      console.error('NoteList.render expected an array of notes, received:', notes);
+      this.notes = [];
+      this.container.innerHTML = '<p class="empty-state">No notes found</p>';
+      return;
+    }
+
     this.notes = notes;
     this.container.innerHTML = '';
 

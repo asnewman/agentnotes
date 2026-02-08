@@ -1,8 +1,16 @@
-const { app, BrowserWindow, ipcMain } = require('electron');
+const { app, BrowserWindow, ipcMain, dialog } = require('electron');
 const path = require('path');
 const fs = require('fs');
 const matter = require('gray-matter');
 const { ulid } = require('ulid');
+const Store = require('electron-store');
+
+// Initialize settings store
+const store = new Store({
+  defaults: {
+    notesDirectory: null
+  }
+});
 
 let mainWindow;
 
@@ -40,11 +48,9 @@ app.on('window-all-closed', () => {
   }
 });
 
-// Get the notes directory path (in parent directory of electron app)
+// Get the notes directory path from stored settings
 function getNotesDir() {
-  // Look in the parent directory of the electron folder
-  const parentDir = path.dirname(__dirname);
-  return path.join(parentDir, '.agentnotes', 'notes');
+  return store.get('notesDirectory');
 }
 
 // Recursively get all markdown files in a directory
@@ -112,8 +118,13 @@ function parseNoteFile(filePath, relativePath = '') {
 ipcMain.handle('notes:list', async () => {
   const notesDir = getNotesDir();
 
+  // No directory configured yet
+  if (!notesDir) {
+    return { notes: [], noDirectory: true };
+  }
+
   if (!fs.existsSync(notesDir)) {
-    return [];
+    return { notes: [], noDirectory: false };
   }
 
   try {
@@ -124,10 +135,10 @@ ipcMain.handle('notes:list', async () => {
       .filter(n => n !== null)
       .sort((a, b) => new Date(b.created) - new Date(a.created));
 
-    return notes;
+    return { notes, noDirectory: false };
   } catch (err) {
     console.error('Error listing notes:', err);
-    return [];
+    return { notes: [], noDirectory: false };
   }
 });
 
@@ -172,11 +183,33 @@ ipcMain.on('window:close', () => {
   mainWindow?.close();
 });
 
+// IPC handler: Get the configured notes directory
+ipcMain.handle('directory:get', async () => {
+  return store.get('notesDirectory');
+});
+
+// IPC handler: Open directory picker and save selection
+ipcMain.handle('directory:select', async () => {
+  const result = await dialog.showOpenDialog(mainWindow, {
+    properties: ['openDirectory'],
+    title: 'Select Notes Directory',
+    buttonLabel: 'Select Folder'
+  });
+
+  if (!result.canceled && result.filePaths.length > 0) {
+    const selectedPath = result.filePaths[0];
+    store.set('notesDirectory', selectedPath);
+    return selectedPath;
+  }
+
+  return null;
+});
+
 // IPC handler: Add a comment to a note
 ipcMain.handle('notes:addComment', async (event, { noteId, content, author, startChar, endChar }) => {
   const notesDir = getNotesDir();
 
-  if (!fs.existsSync(notesDir)) {
+  if (!notesDir || !fs.existsSync(notesDir)) {
     return { success: false, error: 'Notes directory not found' };
   }
 

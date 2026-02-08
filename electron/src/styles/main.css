@@ -95,15 +95,50 @@ html, body {
 }
 
 .title-bar-title {
-  flex: 1;
-  text-align: center;
   font-size: 13px;
   font-weight: 500;
   color: var(--text-secondary);
+  margin-left: 8px;
 }
 
-.title-bar-spacer {
-  width: 52px;
+.title-bar-directory {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px;
+  padding-right: 8px;
+  -webkit-app-region: no-drag;
+}
+
+.title-bar-directory.hidden {
+  display: none;
+}
+
+.directory-path {
+  font-size: 11px;
+  color: var(--text-muted);
+  max-width: 200px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  opacity: 0.7;
+}
+
+.change-directory-btn {
+  font-size: 11px;
+  padding: 2px 8px;
+  border: 1px solid var(--border-color);
+  border-radius: 4px;
+  background: var(--bg-tertiary);
+  color: var(--text-secondary);
+  cursor: pointer;
+  transition: background-color 0.15s, border-color 0.15s;
+}
+
+.change-directory-btn:hover {
+  background: var(--bg-hover);
+  border-color: var(--text-muted);
 }
 
 .app {
@@ -183,4 +218,69 @@ html, body {
 
 ::-webkit-scrollbar-thumb:hover {
   background: var(--text-muted);
+}
+
+/* Directory Overlay */
+.directory-overlay {
+  position: fixed;
+  top: 32px; /* Below title bar */
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: var(--bg-primary);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 100;
+}
+
+.directory-overlay.hidden {
+  display: none;
+}
+
+.directory-overlay-content {
+  text-align: center;
+  max-width: 400px;
+  padding: 40px;
+}
+
+.directory-overlay-content .folder-icon {
+  color: var(--accent-color);
+  margin-bottom: 24px;
+  opacity: 0.8;
+}
+
+.directory-overlay-content h2 {
+  font-size: 20px;
+  font-weight: 600;
+  color: var(--text-primary);
+  margin-bottom: 12px;
+}
+
+.directory-overlay-content p {
+  font-size: 14px;
+  color: var(--text-muted);
+  margin-bottom: 24px;
+  line-height: 1.5;
+}
+
+.select-directory-btn {
+  padding: 10px 24px;
+  font-size: 14px;
+  font-weight: 500;
+  border: none;
+  border-radius: 6px;
+  background: var(--accent-color);
+  color: white;
+  cursor: pointer;
+  transition: background-color 0.15s;
+}
+
+.select-directory-btn:hover {
+  background: var(--accent-hover);
+}
+
+/* Hidden app state */
+.app.hidden {
+  display: none;
 }
