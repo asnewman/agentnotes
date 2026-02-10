@@ -103,6 +103,7 @@ export class NoteView {
 
     this.editor = new Editor({
       element: editorElement,
+      enableInputRules: false,
       extensions: [
         StarterKit,
         CommentHighlight.configure({
