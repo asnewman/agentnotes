@@ -22,6 +22,10 @@
   background-color: var(--bg-hover);
 }
 
+.directory-item.drag-over {
+  background-color: rgba(16, 132, 216, 0.24);
+}
+
 .directory-toggle {
   display: flex;
   align-items: center;
@@ -82,6 +86,10 @@
   background-color: var(--bg-selected);
 }
 
+.note-item.dragging {
+  opacity: 0.55;
+}
+
 .note-icon {
   display: flex;
   align-items: center;
@@ -130,11 +138,43 @@
   gap: 4px;
 }
 
+.note-list.note-list-drop-root {
+  background-color: rgba(16, 132, 216, 0.14);
+}
+
+.note-list-context-menu {
+  position: fixed;
+  z-index: 1400;
+  min-width: 170px;
+  padding: 6px;
+  border-radius: 8px;
+  border: 1px solid var(--border-color);
+  background: var(--bg-tertiary);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.34);
+}
+
+.note-list-context-menu-item {
+  width: 100%;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--text-secondary);
+  font-size: 12px;
+  text-align: left;
+  padding: 8px 10px;
+  cursor: pointer;
+}
+
+.note-list-context-menu-item:hover {
+  background: var(--bg-hover);
+}
+
 /* Note View */
 .note-header {
   padding: 20px 24px;
   border-bottom: 1px solid var(--border-color);
   background-color: var(--bg-tertiary);
+  position: relative;
 }
 
 .note-title {
@@ -185,7 +225,66 @@
 }
 
 .note-actions {
-  min-height: 0;
+  position: absolute;
+  top: 14px;
+  right: 16px;
+}
+
+.note-actions-overflow-btn {
+  padding: 2px 8px;
+  border: 1px solid transparent;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--text-muted);
+  font-size: 14px;
+  line-height: 1;
+  opacity: 0.75;
+  cursor: pointer;
+  transition: opacity 0.15s ease, background-color 0.15s ease, border-color 0.15s ease;
+}
+
+.note-actions-overflow-btn:hover {
+  opacity: 1;
+  background-color: rgba(255, 255, 255, 0.06);
+  border-color: rgba(255, 255, 255, 0.12);
+}
+
+.note-actions-dropdown {
+  display: none;
+  position: absolute;
+  top: calc(100% + 6px);
+  right: 0;
+  min-width: 132px;
+  padding: 6px;
+  border-radius: 8px;
+  border: 1px solid var(--border-color);
+  background: var(--bg-secondary);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.32);
+  z-index: 25;
+}
+
+.note-actions-dropdown.open {
+  display: block;
+}
+
+.note-actions-dropdown-item {
+  width: 100%;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--text-secondary);
+  font-size: 12px;
+  text-align: left;
+  padding: 8px 10px;
+  cursor: pointer;
+}
+
+.note-actions-dropdown-item:hover {
+  background: var(--bg-hover);
+}
+
+.note-actions-dropdown-item-danger:hover {
+  color: #d38f99;
 }
 
 .note-content {

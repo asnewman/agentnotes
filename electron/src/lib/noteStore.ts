@@ -1,9 +1,11 @@
 import type {
   CommentAnchor,
   CommentMutationResult,
+  DirectoryMutationResult,
   Note,
   NotesListResponse,
   NotesListResult,
+  OperationResult,
 } from '../types';
 
 let notesCache: NotesListResult | null = null;
@@ -33,6 +35,52 @@ export async function listNotes(): Promise<NotesListResponse> {
 
 export async function getNote(noteId: string): Promise<Note | null> {
   return window.api.getNote(noteId);
+}
+
+export async function createNote(
+  title: string,
+  directory: string,
+): Promise<CommentMutationResult> {
+  const result = await window.api.createNote(title, directory);
+
+  if (result.success) {
+    clearCache();
+  }
+
+  return result;
+}
+
+export async function deleteNote(noteId: string): Promise<OperationResult> {
+  const result = await window.api.deleteNote(noteId);
+
+  if (result.success) {
+    clearCache();
+  }
+
+  return result;
+}
+
+export async function moveNote(
+  noteId: string,
+  directory: string,
+): Promise<CommentMutationResult> {
+  const result = await window.api.moveNote(noteId, directory);
+
+  if (result.success) {
+    clearCache();
+  }
+
+  return result;
+}
+
+export async function createDirectory(path: string): Promise<DirectoryMutationResult> {
+  const result = await window.api.createDirectory(path);
+
+  if (result.success) {
+    clearCache();
+  }
+
+  return result;
 }
 
 export async function updateNote(noteId: string, content: string): Promise<CommentMutationResult> {

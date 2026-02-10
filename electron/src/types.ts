@@ -48,6 +48,15 @@ export interface CommentMutationResult {
   error?: string;
 }
 
+export interface OperationResult {
+  success: boolean;
+  error?: string;
+}
+
+export interface DirectoryMutationResult extends OperationResult {
+  path?: string;
+}
+
 export interface AddCommentPayload {
   noteId: string;
   content: string;
@@ -71,9 +80,31 @@ export interface UpdateNoteMetadataPayload {
   tags: string[];
 }
 
+export interface CreateNotePayload {
+  title: string;
+  directory: string;
+}
+
+export interface DeleteNotePayload {
+  noteId: string;
+}
+
+export interface MoveNotePayload {
+  noteId: string;
+  directory: string;
+}
+
+export interface CreateDirectoryPayload {
+  path: string;
+}
+
 export interface PreloadApi {
   listNotes: () => Promise<NotesListResult>;
   getNote: (noteId: string) => Promise<Note | null>;
+  createNote: (title: string, directory: string) => Promise<CommentMutationResult>;
+  deleteNote: (noteId: string) => Promise<OperationResult>;
+  moveNote: (noteId: string, directory: string) => Promise<CommentMutationResult>;
+  createDirectory: (path: string) => Promise<DirectoryMutationResult>;
   updateNote: (noteId: string, content: string) => Promise<CommentMutationResult>;
   updateNoteMetadata: (
     noteId: string,

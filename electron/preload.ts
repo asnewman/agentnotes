@@ -2,6 +2,8 @@ import { contextBridge, ipcRenderer } from 'electron';
 import type {
   CommentAnchor,
   CommentMutationResult,
+  DirectoryMutationResult,
+  OperationResult,
   Note,
   NotesListResult,
   PreloadApi,
@@ -10,6 +12,14 @@ import type {
 const api: PreloadApi = {
   listNotes: () => ipcRenderer.invoke('notes:list') as Promise<NotesListResult>,
   getNote: (noteId: string) => ipcRenderer.invoke('notes:get', noteId) as Promise<Note | null>,
+  createNote: (title: string, directory: string) =>
+    ipcRenderer.invoke('notes:create', { title, directory }) as Promise<CommentMutationResult>,
+  deleteNote: (noteId: string) =>
+    ipcRenderer.invoke('notes:delete', { noteId }) as Promise<OperationResult>,
+  moveNote: (noteId: string, directory: string) =>
+    ipcRenderer.invoke('notes:move', { noteId, directory }) as Promise<CommentMutationResult>,
+  createDirectory: (path: string) =>
+    ipcRenderer.invoke('directory:create', { path }) as Promise<DirectoryMutationResult>,
   updateNote: (noteId: string, content: string) =>
     ipcRenderer.invoke('notes:update', { noteId, content }) as Promise<CommentMutationResult>,
   updateNoteMetadata: (noteId: string, title: string, tags: string[]) =>

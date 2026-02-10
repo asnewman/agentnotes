@@ -4,9 +4,13 @@ import { NoteView } from './components/NoteView';
 import {
   addComment,
   clearCache,
+  createDirectory,
+  createNote,
   deleteComment,
+  deleteNote,
   getDirectory,
   listNotes,
+  moveNote,
   selectDirectory,
   updateNote,
   updateNoteMetadata,
@@ -23,6 +27,15 @@ let appElement: HTMLElement | null = null;
 let titleBarDirectory: HTMLElement | null = null;
 let directoryPath: HTMLElement | null = null;
 
+interface TextInputDialogOptions {
+  title: string;
+  description: string;
+  confirmLabel: string;
+  placeholder?: string;
+  value?: string;
+  allowEmpty?: boolean;
+}
+
 function isNotesListResult(result: NotesListResponse): result is NotesListResult {
   return !Array.isArray(result);
 }
@@ -33,6 +46,114 @@ function extractNotes(result: NotesListResponse): Note[] {
   }
 
   return result.notes;
+}
+
+function joinDirectoryPath(baseDirectory: string, relativePath: string): string {
+  const base = baseDirectory.trim().replace(/^\/+|\/+$/g, '');
+  const child = relativePath.trim().replace(/^\/+|\/+$/g, '');
+
+  if (!base) {
+    return child;
+  }
+
+  if (!child) {
+    return base;
+  }
+
+  return `${base}/${child}`;
+}
+
+function showTextInputDialog(options: TextInputDialogOptions): Promise<string | null> {
+  return new Promise((resolve) => {
+    const overlay = document.createElement('div');
+    overlay.className = 'input-dialog-overlay';
+
+    const dialog = document.createElement('div');
+    dialog.className = 'input-dialog';
+
+    const title = document.createElement('h3');
+    title.className = 'input-dialog-title';
+    title.textContent = options.title;
+
+    const description = document.createElement('p');
+    description.className = 'input-dialog-description';
+    description.textContent = options.description;
+
+    const input = document.createElement('input');
+    input.className = 'input-dialog-input';
+    input.type = 'text';
+    input.placeholder = options.placeholder ?? '';
+    input.value = options.value ?? '';
+
+    const error = document.createElement('p');
+    error.className = 'input-dialog-error hidden';
+    error.textContent = 'This field is required.';
+
+    const buttons = document.createElement('div');
+    buttons.className = 'input-dialog-buttons';
+
+    const cancelButton = document.createElement('button');
+    cancelButton.type = 'button';
+    cancelButton.className = 'input-dialog-btn input-dialog-btn-cancel';
+    cancelButton.textContent = 'Cancel';
+
+    const confirmButton = document.createElement('button');
+    confirmButton.type = 'button';
+    confirmButton.className = 'input-dialog-btn input-dialog-btn-confirm';
+    confirmButton.textContent = options.confirmLabel;
+
+    const cleanup = (result: string | null): void => {
+      overlay.remove();
+      resolve(result);
+    };
+
+    const submit = (): void => {
+      const value = input.value.trim();
+      if (!options.allowEmpty && !value) {
+        error.classList.remove('hidden');
+        input.focus();
+        return;
+      }
+
+      cleanup(input.value);
+    };
+
+    cancelButton.addEventListener('click', () => cleanup(null));
+    confirmButton.addEventListener('click', submit);
+
+    input.addEventListener('input', () => {
+      if (input.value.trim()) {
+        error.classList.add('hidden');
+      }
+    });
+
+    input.addEventListener('keydown', (event) => {
+      if (event.key === 'Escape') {
+        event.preventDefault();
+        cleanup(null);
+        return;
+      }
+
+      if (event.key === 'Enter') {
+        event.preventDefault();
+        submit();
+      }
+    });
+
+    overlay.addEventListener('click', (event) => {
+      if (event.target === overlay) {
+        cleanup(null);
+      }
+    });
+
+    buttons.append(cancelButton, confirmButton);
+    dialog.append(title, description, input, error, buttons);
+    overlay.appendChild(dialog);
+    document.body.appendChild(overlay);
+
+    input.focus();
+    input.select();
+  });
 }
 
 function requireElementById<T extends HTMLElement>(id: string): T {
@@ -204,6 +325,123 @@ async function onNoteMetadataSave(noteId: string, title: string, tags: string[])
   }
 }
 
+async function onCreateNote(targetDirectory: string): Promise<void> {
+  const rawTitle = await showTextInputDialog({
+    title: 'Create Note',
+    description: targetDirectory
+      ? `Enter a title for a new note in "${targetDirectory}".`
+      : 'Enter a title for a new root note.',
+    confirmLabel: 'Create',
+    placeholder: 'Note title',
+  });
+
+  if (rawTitle === null) {
+    return;
+  }
+
+  const title = rawTitle.trim();
+  if (!title) {
+    window.alert('Title cannot be empty.');
+    return;
+  }
+
+  try {
+    const result = await createNote(title, targetDirectory);
+
+    if (!result.success || !result.note) {
+      window.alert(result.error ?? 'Failed to create note.');
+      return;
+    }
+
+    await loadNotes(result.note.id);
+  } catch (error) {
+    console.error('Error creating note:', error);
+    window.alert('Failed to create note.');
+  }
+}
+
+async function onCreateDirectory(targetDirectory: string): Promise<void> {
+  const rawPath = await showTextInputDialog({
+    title: 'Create Directory',
+    description: targetDirectory
+      ? `Create a folder inside "${targetDirectory}".`
+      : 'Create a root folder.',
+    confirmLabel: 'Create',
+    placeholder: 'Folder name',
+  });
+
+  if (rawPath === null) {
+    return;
+  }
+
+  const directoryPathInput = rawPath.trim();
+  if (!directoryPathInput) {
+    window.alert('Directory path cannot be empty.');
+    return;
+  }
+
+  const fullPath = joinDirectoryPath(targetDirectory, directoryPathInput);
+
+  try {
+    const result = await createDirectory(fullPath);
+
+    if (!result.success) {
+      window.alert(result.error ?? 'Failed to create directory.');
+      return;
+    }
+
+    await loadNotes(currentNoteId);
+  } catch (error) {
+    console.error('Error creating directory:', error);
+    window.alert('Failed to create directory.');
+  }
+}
+
+async function onMoveNote(note: Note, targetDirectory: string): Promise<void> {
+  if (targetDirectory === note.directory) {
+    return;
+  }
+
+  try {
+    const result = await moveNote(note.id, targetDirectory);
+
+    if (!result.success || !result.note) {
+      window.alert(result.error ?? 'Failed to move note.');
+      return;
+    }
+
+    await loadNotes(result.note.id);
+  } catch (error) {
+    console.error('Error moving note:', error);
+    window.alert('Failed to move note.');
+  }
+}
+
+async function onDeleteNote(note: Note): Promise<void> {
+  const shouldDelete = window.confirm(`Delete note "${note.title}"? This cannot be undone.`);
+  if (!shouldDelete) {
+    return;
+  }
+
+  try {
+    const result = await deleteNote(note.id);
+
+    if (!result.success) {
+      window.alert(result.error ?? 'Failed to delete note.');
+      return;
+    }
+
+    if (currentNoteId === note.id) {
+      currentNoteId = null;
+    }
+
+    await loadNotes(currentNoteId);
+  } catch (error) {
+    console.error('Error deleting note:', error);
+    window.alert('Failed to delete note.');
+  }
+}
+
 function updateDirectoryIndicator(path: string | null): void {
   if (!titleBarDirectory || !directoryPath) {
     return;
@@ -237,7 +475,7 @@ async function handleSelectDirectory(): Promise<void> {
   await loadNotes();
 }
 
-async function loadNotes(): Promise<void> {
+async function loadNotes(preferredNoteId: string | null = currentNoteId): Promise<void> {
   const noteListContainer = requireElementById<HTMLElement>('noteList');
 
   try {
@@ -246,6 +484,7 @@ async function loadNotes(): Promise<void> {
 
     if (isNotesListResult(result) && result.noDirectory) {
       noteListContainer.innerHTML = '<p class="empty-state">No directory configured</p>';
+      currentNoteId = null;
       noteView?.clear();
       commentsPanel?.clear();
       return;
@@ -254,9 +493,16 @@ async function loadNotes(): Promise<void> {
     noteList?.render(notes);
 
     if (notes.length > 0) {
-      const firstNote = notes[0];
-      noteList?.selectNote(firstNote.id);
+      const fallbackNoteId = notes[0]?.id ?? null;
+      const nextSelectedId = preferredNoteId && notes.some((note) => note.id === preferredNoteId)
+        ? preferredNoteId
+        : fallbackNoteId;
+
+      if (nextSelectedId) {
+        noteList?.selectNote(nextSelectedId);
+      }
     } else {
+      currentNoteId = null;
       noteView?.clear();
       commentsPanel?.clear();
     }
@@ -290,13 +536,19 @@ async function init(): Promise<void> {
   const noteContentContainer = requireElementById<HTMLElement>('noteContent');
   const commentsListContainer = requireElementById<HTMLElement>('commentsList');
 
-  noteList = new NoteList(noteListContainer, onSelectNote);
+  noteList = new NoteList(noteListContainer, {
+    onSelectNote,
+    onMoveNote,
+    onCreateNote,
+    onCreateDirectory,
+  });
   noteView = new NoteView(noteHeaderContainer, noteContentContainer);
   commentsPanel = new CommentsPanel(commentsListContainer);
 
   noteView.setOnCommentCreate(onCommentCreate);
   noteView.setOnNoteSave(onNoteSave);
   noteView.setOnNoteMetadataSave(onNoteMetadataSave);
+  noteView.setOnNoteDelete(onDeleteNote);
   commentsPanel.setOnCommentSubmit(onCommentSubmit);
   commentsPanel.setOnCommentDelete(onCommentDelete);
 

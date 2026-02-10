@@ -81,6 +81,16 @@ The GUI provides a three-panel layout:
 - Center: Note content with metadata (rendered as styled markdown via TipTap)
 - Right: Inline comments panel showing comments with text previews
 
+### Managing Notes in GUI
+Users can manage notes directly from the left sidebar and note header:
+1. Right-click in the note list to open a context menu with:
+   - `New Note` (creates in the clicked location)
+   - `New Folder` (creates in the clicked location)
+2. Move notes by dragging a note and dropping it on a folder (or root area).
+3. Delete the current note from the `...` menu in the top-right of the note header.
+
+Create/move/delete operations update markdown files directly on disk while preserving note frontmatter metadata.
+
 ### Creating Comments in GUI
 Users can create comments by highlighting text in the note view:
 1. Select text in the note content

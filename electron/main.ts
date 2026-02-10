@@ -12,10 +12,16 @@ import type {
   CommentAnchor,
   CommentMutationResult,
   CommentStatus,
+  CreateDirectoryPayload,
+  CreateNotePayload,
+  DeleteNotePayload,
   DeleteCommentPayload,
+  DirectoryMutationResult,
+  MoveNotePayload,
   Note,
   NoteComment,
   NotesListResult,
+  OperationResult,
   UpdateNoteMetadataPayload,
   UpdateNotePayload,
 } from './src/types';
@@ -143,6 +149,108 @@ function normalizeTags(tags: string[]): string[] {
   }
 
   return normalized;
+}
+
+function slugify(value: string): string {
+  const normalized = value.trim().toLocaleLowerCase();
+  let result = '';
+  let prevDash = false;
+
+  for (const char of normalized) {
+    const isAsciiLower = char >= 'a' && char <= 'z';
+    const isDigit = char >= '0' && char <= '9';
+
+    if (isAsciiLower || isDigit) {
+      result += char;
+      prevDash = false;
+      continue;
+    }
+
+    if (char === ' ' || char === '-' || char === '_') {
+      if (!prevDash && result.length > 0) {
+        result += '-';
+        prevDash = true;
+      }
+    }
+  }
+
+  return result.replace(/-+$/g, '');
+}
+
+function normalizeDirectoryInput(value: string): string | null {
+  const trimmed = value.trim();
+  if (!trimmed) {
+    return '';
+  }
+
+  const segments = trimmed
+    .replace(/\\/g, '/')
+    .split('/')
+    .map((segment) => segment.trim())
+    .filter((segment) => segment.length > 0);
+
+  if (segments.length === 0) {
+    return '';
+  }
+
+  for (const segment of segments) {
+    if (segment === '.' || segment === '..') {
+      return null;
+    }
+  }
+
+  return segments.join('/');
+}
+
+function resolveNotesPath(notesDir: string, relativePath = ''): string | null {
+  const normalized = normalizeDirectoryInput(relativePath);
+  if (normalized === null) {
+    return null;
+  }
+
+  const resolved = path.resolve(notesDir, normalized);
+  const relative = path.relative(notesDir, resolved);
+
+  if (relative.startsWith('..') || path.isAbsolute(relative)) {
+    return null;
+  }
+
+  return resolved;
+}
+
+function formatRelativePath(inputPath: string): string {
+  return inputPath.replace(/\\/g, '/');
+}
+
+function cleanupEmptyParentDirectories(startDir: string, stopDir: string): void {
+  let current = startDir;
+  const resolvedStop = path.resolve(stopDir);
+
+  while (path.resolve(current) !== resolvedStop) {
+    let entries: string[] = [];
+    try {
+      entries = fs.readdirSync(current);
+    } catch {
+      return;
+    }
+
+    if (entries.length > 0) {
+      return;
+    }
+
+    try {
+      fs.rmdirSync(current);
+    } catch {
+      return;
+    }
+
+    const parent = path.dirname(current);
+    if (parent === current) {
+      return;
+    }
+
+    current = parent;
+  }
 }
 
 function getFileTimestampIso(filePath: string): string {
@@ -369,12 +477,51 @@ function getAllMarkdownFiles(dir: string, baseDir = dir): MarkdownFileRecord[] {
     }
 
     if (entry.isFile() && entry.name.endsWith('.md')) {
-      const relativePath = path.relative(baseDir, fullPath);
+      const relativePath = formatRelativePath(path.relative(baseDir, fullPath));
       files.push({ fullPath, relativePath });
     }
   }
 
   return files;
+}
+
+function getRelativePathFromNotesDir(notesDir: string, fullPath: string): string {
+  return formatRelativePath(path.relative(notesDir, fullPath));
+}
+
+function findNoteRecordById(notesDir: string, noteId: string): MarkdownFileRecord | null {
+  const files = getAllMarkdownFiles(notesDir);
+
+  for (const file of files) {
+    try {
+      const fileContent = fs.readFileSync(file.fullPath, 'utf-8');
+      const parsedMatter = matter(fileContent);
+      const data = parsedMatter.data as FrontmatterData;
+      if (toStringValue(data.id) === noteId) {
+        return file;
+      }
+    } catch (error) {
+      console.error(`Error reading note ${file.fullPath}:`, error);
+    }
+  }
+
+  return null;
+}
+
+function generateUniqueFilePath(targetDir: string, baseName: string): string {
+  const extension = '.md';
+  const normalizedBaseName = baseName.trim() || 'note';
+  let candidateName = `${normalizedBaseName}${extension}`;
+  let candidatePath = path.join(targetDir, candidateName);
+  let suffix = 2;
+
+  while (fs.existsSync(candidatePath)) {
+    candidateName = `${normalizedBaseName}-${suffix}${extension}`;
+    candidatePath = path.join(targetDir, candidateName);
+    suffix += 1;
+  }
+
+  return candidatePath;
 }
 
 function parseNoteFile(filePath: string, relativePath = ''): Note | null {
@@ -384,7 +531,8 @@ function parseNoteFile(filePath: string, relativePath = ''): Note | null {
     const data = parsedMatter.data as FrontmatterData;
     const fallbackIso = getFileTimestampIso(filePath);
     const content = normalizeContent(parsedMatter.content);
-    const directory = relativePath ? path.dirname(relativePath) : '';
+    const normalizedRelativePath = formatRelativePath(relativePath || path.basename(filePath));
+    const directory = normalizedRelativePath ? formatRelativePath(path.dirname(normalizedRelativePath)) : '';
 
     const declaredRev = Math.max(0, toNumberValue(data.comment_rev, 0));
     const defaultRev = declaredRev > 0 ? declaredRev : 0;
@@ -408,7 +556,7 @@ function parseNoteFile(filePath: string, relativePath = ''): Note | null {
       })),
       content,
       filename: path.basename(filePath),
-      relativePath: relativePath || path.basename(filePath),
+      relativePath: normalizedRelativePath,
       directory: directory === '.' ? '' : directory,
     };
   } catch (error) {
@@ -483,6 +631,38 @@ function isUpdateNoteMetadataPayload(payload: unknown): payload is UpdateNoteMet
   );
 }
 
+function isCreateNotePayload(payload: unknown): payload is CreateNotePayload {
+  if (!isRecord(payload)) {
+    return false;
+  }
+
+  return typeof payload.title === 'string' && typeof payload.directory === 'string';
+}
+
+function isDeleteNotePayload(payload: unknown): payload is DeleteNotePayload {
+  if (!isRecord(payload)) {
+    return false;
+  }
+
+  return typeof payload.noteId === 'string';
+}
+
+function isMoveNotePayload(payload: unknown): payload is MoveNotePayload {
+  if (!isRecord(payload)) {
+    return false;
+  }
+
+  return typeof payload.noteId === 'string' && typeof payload.directory === 'string';
+}
+
+function isCreateDirectoryPayload(payload: unknown): payload is CreateDirectoryPayload {
+  if (!isRecord(payload)) {
+    return false;
+  }
+
+  return typeof payload.path === 'string';
+}
+
 ipcMain.handle('notes:list', async (): Promise<NotesListResult> => {
   const notesDir = getNotesDir();
 
@@ -532,6 +712,163 @@ ipcMain.handle('notes:get', async (_event, noteId: string): Promise<Note | null>
     return null;
   }
 });
+
+ipcMain.handle(
+  'notes:create',
+  async (_event, payload: unknown): Promise<CommentMutationResult> => {
+    if (!isCreateNotePayload(payload)) {
+      return { success: false, error: 'Invalid create note payload' };
+    }
+
+    const notesDir = getNotesDir();
+    if (!notesDir || !fs.existsSync(notesDir)) {
+      return { success: false, error: 'Notes directory not found' };
+    }
+
+    const title = payload.title.trim();
+    if (!title) {
+      return { success: false, error: 'Title cannot be empty' };
+    }
+
+    const normalizedDirectory = normalizeDirectoryInput(payload.directory);
+    if (normalizedDirectory === null) {
+      return { success: false, error: 'Invalid directory path' };
+    }
+
+    const targetDirectory = resolveNotesPath(notesDir, normalizedDirectory);
+    if (!targetDirectory) {
+      return { success: false, error: 'Directory path escapes notes root' };
+    }
+
+    try {
+      fs.mkdirSync(targetDirectory, { recursive: true });
+
+      const nowIso = new Date().toISOString();
+      const datePrefix = nowIso.slice(0, 10);
+      const titleSlug = slugify(title) || 'note';
+      const filePath = generateUniqueFilePath(targetDirectory, `${datePrefix}-${titleSlug}`);
+      const noteData: FrontmatterData = {
+        id: ulid(),
+        title,
+        tags: [],
+        created: nowIso,
+        updated: nowIso,
+        source: 'user',
+      };
+      const noteContent = `# ${title}\n\n`;
+      const noteFile = matter.stringify(noteContent, noteData);
+      fs.writeFileSync(filePath, noteFile, 'utf-8');
+
+      const relativePath = getRelativePathFromNotesDir(notesDir, filePath);
+      return {
+        success: true,
+        note: parseNoteFile(filePath, relativePath) ?? undefined,
+      };
+    } catch (error) {
+      console.error('Error creating note:', error);
+      return {
+        success: false,
+        error: error instanceof Error ? error.message : 'Unknown error',
+      };
+    }
+  },
+);
+
+ipcMain.handle(
+  'notes:delete',
+  async (_event, payload: unknown): Promise<OperationResult> => {
+    if (!isDeleteNotePayload(payload)) {
+      return { success: false, error: 'Invalid delete note payload' };
+    }
+
+    const notesDir = getNotesDir();
+    if (!notesDir || !fs.existsSync(notesDir)) {
+      return { success: false, error: 'Notes directory not found' };
+    }
+
+    try {
+      const record = findNoteRecordById(notesDir, payload.noteId);
+      if (!record) {
+        return { success: false, error: 'Note not found' };
+      }
+
+      fs.unlinkSync(record.fullPath);
+
+      const parentDir = path.dirname(record.fullPath);
+      if (path.resolve(parentDir) !== path.resolve(notesDir)) {
+        cleanupEmptyParentDirectories(parentDir, notesDir);
+      }
+
+      return { success: true };
+    } catch (error) {
+      console.error('Error deleting note:', error);
+      return {
+        success: false,
+        error: error instanceof Error ? error.message : 'Unknown error',
+      };
+    }
+  },
+);
+
+ipcMain.handle(
+  'notes:move',
+  async (_event, payload: unknown): Promise<CommentMutationResult> => {
+    if (!isMoveNotePayload(payload)) {
+      return { success: false, error: 'Invalid move note payload' };
+    }
+
+    const notesDir = getNotesDir();
+    if (!notesDir || !fs.existsSync(notesDir)) {
+      return { success: false, error: 'Notes directory not found' };
+    }
+
+    const normalizedDirectory = normalizeDirectoryInput(payload.directory);
+    if (normalizedDirectory === null) {
+      return { success: false, error: 'Invalid target directory' };
+    }
+
+    const targetDirectory = resolveNotesPath(notesDir, normalizedDirectory);
+    if (!targetDirectory) {
+      return { success: false, error: 'Target directory escapes notes root' };
+    }
+
+    try {
+      const record = findNoteRecordById(notesDir, payload.noteId);
+      if (!record) {
+        return { success: false, error: 'Note not found' };
+      }
+
+      fs.mkdirSync(targetDirectory, { recursive: true });
+
+      const currentPath = path.resolve(record.fullPath);
+      const currentDirectory = path.dirname(currentPath);
+
+      let destinationPath = path.join(targetDirectory, path.basename(record.fullPath));
+      if (path.resolve(destinationPath) !== currentPath && fs.existsSync(destinationPath)) {
+        destinationPath = generateUniqueFilePath(targetDirectory, path.basename(record.fullPath, '.md'));
+      }
+
+      if (path.resolve(destinationPath) !== currentPath) {
+        fs.renameSync(record.fullPath, destinationPath);
+        if (path.resolve(currentDirectory) !== path.resolve(notesDir)) {
+          cleanupEmptyParentDirectories(currentDirectory, notesDir);
+        }
+      }
+
+      const relativePath = getRelativePathFromNotesDir(notesDir, destinationPath);
+      return {
+        success: true,
+        note: parseNoteFile(destinationPath, relativePath) ?? undefined,
+      };
+    } catch (error) {
+      console.error('Error moving note:', error);
+      return {
+        success: false,
+        error: error instanceof Error ? error.message : 'Unknown error',
+      };
+    }
+  },
+);
 
 ipcMain.handle(
   'notes:update',
@@ -681,6 +1018,41 @@ ipcMain.on('window:close', () => {
 ipcMain.handle('directory:get', async (): Promise<string | null> => {
   return getNotesDir();
 });
+
+ipcMain.handle(
+  'directory:create',
+  async (_event, payload: unknown): Promise<DirectoryMutationResult> => {
+    if (!isCreateDirectoryPayload(payload)) {
+      return { success: false, error: 'Invalid create directory payload' };
+    }
+
+    const notesDir = getNotesDir();
+    if (!notesDir || !fs.existsSync(notesDir)) {
+      return { success: false, error: 'Notes directory not found' };
+    }
+
+    const normalizedPath = normalizeDirectoryInput(payload.path);
+    if (normalizedPath === null || !normalizedPath) {
+      return { success: false, error: 'Invalid directory path' };
+    }
+
+    const targetPath = resolveNotesPath(notesDir, normalizedPath);
+    if (!targetPath) {
+      return { success: false, error: 'Directory path escapes notes root' };
+    }
+
+    try {
+      fs.mkdirSync(targetPath, { recursive: true });
+      return { success: true, path: normalizedPath };
+    } catch (error) {
+      console.error('Error creating directory:', error);
+      return {
+        success: false,
+        error: error instanceof Error ? error.message : 'Unknown error',
+      };
+    }
+  },
+);
 
 ipcMain.handle('directory:select', async (): Promise<string | null> => {
   const dialogOptions: OpenDialogOptions = {

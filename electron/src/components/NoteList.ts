@@ -15,6 +15,13 @@ interface NoteNode {
 
 type TreeNode = DirectoryNode | NoteNode;
 
+interface NoteListCallbacks {
+  onSelectNote: (note: Note) => void;
+  onMoveNote: (note: Note, targetDirectory: string) => void | Promise<void>;
+  onCreateNote: (targetDirectory: string) => void | Promise<void>;
+  onCreateDirectory: (targetDirectory: string) => void | Promise<void>;
+}
+
 function parseDate(value: string): number {
   const timestamp = Date.parse(value);
   return Number.isNaN(timestamp) ? 0 : timestamp;
@@ -176,6 +183,7 @@ function createNoteItem(note: Note, isSelected: boolean, depth = 0): HTMLDivElem
   item.className = `note-item${isSelected ? ' selected' : ''}`;
   item.dataset.noteId = note.id;
   item.style.paddingLeft = `${16 + depth * 16 + (depth > 0 ? 22 : 0)}px`;
+  item.draggable = true;
 
   const docIcon = document.createElement('span');
   docIcon.className = 'note-icon';
@@ -191,19 +199,180 @@ function createNoteItem(note: Note, isSelected: boolean, depth = 0): HTMLDivElem
 
 export class NoteList {
   private container: HTMLElement;
-  private onSelectNote: (note: Note) => void;
+  private callbacks: NoteListCallbacks;
   private notes: Note[];
   private selectedNoteId: string | null;
   private expandedDirs: Set<string>;
   private initialized: boolean;
+  private draggingNoteId: string | null;
+  private contextMenu: HTMLDivElement | null;
 
-  constructor(container: HTMLElement, onSelectNote: (note: Note) => void) {
+  constructor(container: HTMLElement, callbacks: NoteListCallbacks) {
     this.container = container;
-    this.onSelectNote = onSelectNote;
+    this.callbacks = callbacks;
     this.notes = [];
     this.selectedNoteId = null;
     this.expandedDirs = new Set<string>();
     this.initialized = false;
+    this.draggingNoteId = null;
+    this.contextMenu = null;
+
+    this.bindInteractions();
+  }
+
+  private bindInteractions(): void {
+    this.container.addEventListener('contextmenu', (event) => {
+      event.preventDefault();
+      const targetDirectory = this.resolveTargetDirectory(event.target);
+      this.showContextMenu(event.clientX, event.clientY, targetDirectory);
+    });
+
+    this.container.addEventListener('dragover', (event) => {
+      if (!this.draggingNoteId) {
+        return;
+      }
+
+      const targetElement = event.target;
+      if (
+        targetElement instanceof Element &&
+        targetElement.closest('.directory-item[data-path]')
+      ) {
+        return;
+      }
+
+      event.preventDefault();
+      const targetDirectory = this.resolveTargetDirectory(event.target);
+      this.container.classList.toggle('note-list-drop-root', targetDirectory === '');
+    });
+
+    this.container.addEventListener('drop', (event) => {
+      if (!this.draggingNoteId) {
+        return;
+      }
+
+      const targetElement = event.target;
+      if (
+        targetElement instanceof Element &&
+        targetElement.closest('.directory-item[data-path]')
+      ) {
+        return;
+      }
+
+      event.preventDefault();
+      const targetDirectory = this.resolveTargetDirectory(event.target);
+      this.moveDraggingNote(targetDirectory);
+      this.clearDragIndicators();
+    });
+
+    this.container.addEventListener('dragleave', (event) => {
+      const relatedTarget = event.relatedTarget;
+      if (!(relatedTarget instanceof Node) || !this.container.contains(relatedTarget)) {
+        this.container.classList.remove('note-list-drop-root');
+      }
+    });
+
+    document.addEventListener('click', () => this.hideContextMenu());
+    window.addEventListener('blur', () => this.hideContextMenu());
+    window.addEventListener('resize', () => this.hideContextMenu());
+    window.addEventListener('keydown', (event) => {
+      if (event.key === 'Escape') {
+        this.hideContextMenu();
+      }
+    });
+  }
+
+  private resolveTargetDirectory(target: EventTarget | null): string {
+    if (!(target instanceof Element)) {
+      return '';
+    }
+
+    const directoryItem = target.closest<HTMLElement>('.directory-item[data-path]');
+    if (directoryItem?.dataset.path) {
+      return directoryItem.dataset.path;
+    }
+
+    const directoryChildren = target.closest<HTMLElement>('.directory-children[data-path]');
+    if (directoryChildren?.dataset.path) {
+      return directoryChildren.dataset.path;
+    }
+
+    const noteItem = target.closest<HTMLElement>('.note-item[data-note-id]');
+    if (noteItem?.dataset.noteId) {
+      const note = this.notes.find((entry) => entry.id === noteItem.dataset.noteId);
+      if (note) {
+        return note.directory;
+      }
+    }
+
+    return '';
+  }
+
+  private showContextMenu(x: number, y: number, targetDirectory: string): void {
+    this.hideContextMenu();
+
+    const menu = document.createElement('div');
+    menu.className = 'note-list-context-menu';
+
+    const addAction = (label: string, onClick: () => void | Promise<void>): void => {
+      const button = document.createElement('button');
+      button.type = 'button';
+      button.className = 'note-list-context-menu-item';
+      button.textContent = label;
+      button.addEventListener('click', () => {
+        this.hideContextMenu();
+        void onClick();
+      });
+      menu.appendChild(button);
+    };
+
+    addAction('New Note', () => this.callbacks.onCreateNote(targetDirectory));
+    addAction('New Folder', () => this.callbacks.onCreateDirectory(targetDirectory));
+
+    document.body.appendChild(menu);
+    this.contextMenu = menu;
+
+    const rect = menu.getBoundingClientRect();
+    const maxX = Math.max(8, window.innerWidth - rect.width - 8);
+    const maxY = Math.max(8, window.innerHeight - rect.height - 8);
+    menu.style.left = `${Math.max(8, Math.min(x, maxX))}px`;
+    menu.style.top = `${Math.max(8, Math.min(y, maxY))}px`;
+  }
+
+  private hideContextMenu(): void {
+    if (!this.contextMenu) {
+      return;
+    }
+
+    this.contextMenu.remove();
+    this.contextMenu = null;
+  }
+
+  private clearDragIndicators(): void {
+    this.container.classList.remove('note-list-drop-root');
+    this.container.querySelectorAll<HTMLElement>('.directory-item.drag-over').forEach((item) => {
+      item.classList.remove('drag-over');
+    });
+    this.container.querySelectorAll<HTMLElement>('.note-item.dragging').forEach((item) => {
+      item.classList.remove('dragging');
+    });
+    this.draggingNoteId = null;
+  }
+
+  private moveDraggingNote(targetDirectory: string): void {
+    if (!this.draggingNoteId) {
+      return;
+    }
+
+    const note = this.notes.find((entry) => entry.id === this.draggingNoteId);
+    if (!note) {
+      return;
+    }
+
+    if (note.directory === targetDirectory) {
+      return;
+    }
+
+    void this.callbacks.onMoveNote(note, targetDirectory);
   }
 
   render(notes: Note[]): void {
@@ -256,6 +425,35 @@ export class NoteList {
           this.toggleDirectory(item.path);
         });
 
+        dirElement.addEventListener('dragover', (event) => {
+          if (!this.draggingNoteId) {
+            return;
+          }
+
+          event.preventDefault();
+          event.stopPropagation();
+          dirElement.classList.add('drag-over');
+        });
+
+        dirElement.addEventListener('dragleave', (event) => {
+          const relatedTarget = event.relatedTarget;
+          if (!(relatedTarget instanceof Node) || !dirElement.contains(relatedTarget)) {
+            dirElement.classList.remove('drag-over');
+          }
+        });
+
+        dirElement.addEventListener('drop', (event) => {
+          if (!this.draggingNoteId) {
+            return;
+          }
+
+          event.preventDefault();
+          event.stopPropagation();
+          dirElement.classList.remove('drag-over');
+          this.moveDraggingNote(item.path);
+          this.clearDragIndicators();
+        });
+
         container.appendChild(dirElement);
 
         const childContainer = document.createElement('div');
@@ -274,6 +472,18 @@ export class NoteList {
       const noteElement = createNoteItem(item.note, item.note.id === this.selectedNoteId, depth);
       noteElement.addEventListener('click', () => {
         this.selectNote(item.note.id);
+      });
+      noteElement.addEventListener('dragstart', (event) => {
+        this.hideContextMenu();
+        this.draggingNoteId = item.note.id;
+        noteElement.classList.add('dragging');
+        if (event.dataTransfer) {
+          event.dataTransfer.setData('text/plain', item.note.id);
+          event.dataTransfer.effectAllowed = 'move';
+        }
+      });
+      noteElement.addEventListener('dragend', () => {
+        this.clearDragIndicators();
       });
       container.appendChild(noteElement);
     }
@@ -312,7 +522,7 @@ export class NoteList {
 
     const note = this.notes.find((entry) => entry.id === noteId);
     if (note) {
-      this.onSelectNote(note);
+      this.callbacks.onSelectNote(note);
     }
   }
 

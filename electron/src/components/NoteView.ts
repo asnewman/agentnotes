@@ -23,6 +23,7 @@ interface MetadataUpdate {
 type CommentCreateHandler = (anchor: CommentAnchor, selectedText: string) => void;
 type NoteSaveHandler = (noteId: string, content: string) => Promise<Note | null>;
 type NoteMetadataSaveHandler = (noteId: string, title: string, tags: string[]) => Promise<Note | null>;
+type NoteActionHandler = (note: Note) => void | Promise<void>;
 
 interface SaveEditsOptions {
   keepEditing?: boolean;
@@ -38,6 +39,7 @@ export class NoteView {
   private onCommentCreateCallback: CommentCreateHandler | null;
   private onNoteSaveCallback: NoteSaveHandler | null;
   private onNoteMetadataSaveCallback: NoteMetadataSaveHandler | null;
+  private onNoteDeleteCallback: NoteActionHandler | null;
   private currentSelection: CurrentSelection | null;
   private isSaving: boolean;
   private isSavingMetadata: boolean;
@@ -46,6 +48,8 @@ export class NoteView {
   private pendingMetadataUpdate: MetadataUpdate | null;
   private lastSavedContent: string;
   private isApplyingContent: boolean;
+  private actionsMenuDismissHandler: ((event: MouseEvent) => void) | null;
+  private actionsMenuKeyHandler: ((event: KeyboardEvent) => void) | null;
 
   constructor(headerContainer: HTMLElement, contentContainer: HTMLElement) {
     this.headerContainer = headerContainer;
@@ -57,6 +61,7 @@ export class NoteView {
     this.onCommentCreateCallback = null;
     this.onNoteSaveCallback = null;
     this.onNoteMetadataSaveCallback = null;
+    this.onNoteDeleteCallback = null;
     this.currentSelection = null;
     this.isSaving = false;
     this.isSavingMetadata = false;
@@ -65,6 +70,8 @@ export class NoteView {
     this.pendingMetadataUpdate = null;
     this.lastSavedContent = '';
     this.isApplyingContent = false;
+    this.actionsMenuDismissHandler = null;
+    this.actionsMenuKeyHandler = null;
   }
 
   setOnCommentCreate(callback: CommentCreateHandler): void {
@@ -77,6 +84,10 @@ export class NoteView {
 
   setOnNoteMetadataSave(callback: NoteMetadataSaveHandler): void {
     this.onNoteMetadataSaveCallback = callback;
+  }
+
+  setOnNoteDelete(callback: NoteActionHandler): void {
+    this.onNoteDeleteCallback = callback;
   }
 
   private initEditor(): void {
@@ -555,8 +566,98 @@ export class NoteView {
 
   private renderActions(): void {
     const actionsElement = this.headerContainer.querySelector<HTMLElement>('.note-actions');
-    if (actionsElement) {
-      actionsElement.innerHTML = '';
+    if (!actionsElement) {
+      return;
+    }
+
+    this.teardownActionsMenuListeners();
+    actionsElement.innerHTML = '';
+    if (!this.currentNote) {
+      return;
+    }
+
+    const overflowButton = document.createElement('button');
+    overflowButton.type = 'button';
+    overflowButton.className = 'note-actions-overflow-btn';
+    overflowButton.textContent = '...';
+    overflowButton.setAttribute('aria-label', 'More note actions');
+    overflowButton.setAttribute('aria-haspopup', 'menu');
+    overflowButton.setAttribute('aria-expanded', 'false');
+
+    const dropdown = document.createElement('div');
+    dropdown.className = 'note-actions-dropdown';
+    dropdown.setAttribute('role', 'menu');
+
+    const deleteButton = document.createElement('button');
+    deleteButton.type = 'button';
+    deleteButton.className = 'note-actions-dropdown-item note-actions-dropdown-item-danger';
+    deleteButton.textContent = 'Delete note';
+    deleteButton.setAttribute('role', 'menuitem');
+
+    const closeDropdown = (): void => {
+      dropdown.classList.remove('open');
+      overflowButton.setAttribute('aria-expanded', 'false');
+      this.teardownActionsMenuListeners();
+    };
+
+    const openDropdown = (): void => {
+      dropdown.classList.add('open');
+      overflowButton.setAttribute('aria-expanded', 'true');
+
+      this.actionsMenuDismissHandler = (event: MouseEvent) => {
+        const target = event.target;
+        if (target instanceof Node && actionsElement.contains(target)) {
+          return;
+        }
+
+        closeDropdown();
+      };
+
+      this.actionsMenuKeyHandler = (event: KeyboardEvent) => {
+        if (event.key === 'Escape') {
+          closeDropdown();
+        }
+      };
+
+      document.addEventListener('mousedown', this.actionsMenuDismissHandler);
+      document.addEventListener('keydown', this.actionsMenuKeyHandler);
+    };
+
+    overflowButton.addEventListener('click', (event) => {
+      event.stopPropagation();
+
+      if (dropdown.classList.contains('open')) {
+        closeDropdown();
+      } else {
+        openDropdown();
+      }
+    });
+
+    dropdown.addEventListener('click', (event) => {
+      event.stopPropagation();
+    });
+
+    deleteButton.addEventListener('click', () => {
+      closeDropdown();
+
+      if (this.currentNote && this.onNoteDeleteCallback) {
+        void this.onNoteDeleteCallback(this.currentNote);
+      }
+    });
+
+    dropdown.append(deleteButton);
+    actionsElement.append(overflowButton, dropdown);
+  }
+
+  private teardownActionsMenuListeners(): void {
+    if (this.actionsMenuDismissHandler) {
+      document.removeEventListener('mousedown', this.actionsMenuDismissHandler);
+      this.actionsMenuDismissHandler = null;
+    }
+
+    if (this.actionsMenuKeyHandler) {
+      document.removeEventListener('keydown', this.actionsMenuKeyHandler);
+      this.actionsMenuKeyHandler = null;
     }
   }
 
@@ -813,6 +914,7 @@ export class NoteView {
 
   private renderEmpty(): void {
     this.clearAutosaveTimer();
+    this.teardownActionsMenuListeners();
     this.currentNote = null;
     this.isSaving = false;
     this.isSavingMetadata = false;
@@ -855,6 +957,7 @@ export class NoteView {
 
   destroy(): void {
     this.clearAutosaveTimer();
+    this.teardownActionsMenuListeners();
 
     if (this.editor) {
       this.editor.destroy();
