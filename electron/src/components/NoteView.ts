@@ -48,6 +48,7 @@ export class NoteView {
   private pendingMetadataUpdate: MetadataUpdate | null;
   private lastSavedContent: string;
   private isApplyingContent: boolean;
+  private markdownStylingTimer: number | null;
   private actionsMenuDismissHandler: ((event: MouseEvent) => void) | null;
   private actionsMenuKeyHandler: ((event: KeyboardEvent) => void) | null;
 
@@ -70,6 +71,7 @@ export class NoteView {
     this.pendingMetadataUpdate = null;
     this.lastSavedContent = '';
     this.isApplyingContent = false;
+    this.markdownStylingTimer = null;
     this.actionsMenuDismissHandler = null;
     this.actionsMenuKeyHandler = null;
   }
@@ -312,6 +314,8 @@ export class NoteView {
       return;
     }
 
+    this.scheduleMarkdownStyling(editor);
+
     const content = editor.state.doc.textBetween(0, editor.state.doc.content.size, '\n', '\n');
     if (content === this.lastSavedContent) {
       return;
@@ -347,6 +351,74 @@ export class NoteView {
       window.clearTimeout(this.autosaveTimer);
       this.autosaveTimer = null;
     }
+  }
+
+  private scheduleMarkdownStyling(editor: Editor, delayMs = 120): void {
+    if (this.markdownStylingTimer !== null) {
+      window.clearTimeout(this.markdownStylingTimer);
+    }
+
+    this.markdownStylingTimer = window.setTimeout(() => {
+      this.markdownStylingTimer = null;
+      this.applyMarkdownStyling(editor);
+    }, delayMs);
+  }
+
+  private applyMarkdownStyling(editor: Editor): void {
+    if (!this.currentNote || this.isApplyingContent) {
+      return;
+    }
+
+    const content = editor.state.doc.textBetween(0, editor.state.doc.content.size, '\n', '\n');
+    const normalizedHtml = this.markdownToTipTap(content);
+
+    if (editor.getHTML() === normalizedHtml) {
+      return;
+    }
+
+    const anchorOffset = editor.state.doc.textBetween(
+      0,
+      editor.state.selection.anchor,
+      '\n',
+      '\n',
+    ).length;
+    const headOffset = editor.state.doc.textBetween(0, editor.state.selection.head, '\n', '\n').length;
+
+    this.isApplyingContent = true;
+    try {
+      editor.commands.setContent(normalizedHtml, false);
+
+      const anchorPosition = this.plainTextOffsetToDocPosition(editor, anchorOffset);
+      const headPosition = this.plainTextOffsetToDocPosition(editor, headOffset);
+
+      const from = Math.min(anchorPosition, headPosition);
+      const to = Math.max(anchorPosition, headPosition);
+      editor.commands.setTextSelection({ from, to });
+    } catch (error) {
+      console.debug('Could not apply live markdown styling:', error);
+    } finally {
+      this.isApplyingContent = false;
+    }
+  }
+
+  private plainTextOffsetToDocPosition(editor: Editor, offset: number): number {
+    const { doc } = editor.state;
+    const totalText = doc.textBetween(0, doc.content.size, '\n', '\n');
+    const clampedOffset = Math.max(0, Math.min(offset, totalText.length));
+
+    let low = 0;
+    let high = doc.content.size;
+    while (low < high) {
+      const mid = Math.floor((low + high) / 2);
+      const midLength = doc.textBetween(0, mid, '\n', '\n').length;
+      if (midLength < clampedOffset) {
+        low = mid + 1;
+      } else {
+        high = mid;
+      }
+    }
+
+    return Math.max(1, Math.min(doc.content.size - 1, low));
   }
 
   private ensureLastSavedOverlay(): void {
@@ -396,6 +468,10 @@ export class NoteView {
     const isDifferentNote = this.currentNote?.id !== note.id;
     if (isDifferentNote) {
       this.clearAutosaveTimer();
+      if (this.markdownStylingTimer !== null) {
+        window.clearTimeout(this.markdownStylingTimer);
+        this.markdownStylingTimer = null;
+      }
       this.isSaving = false;
       this.isSavingMetadata = false;
       this.pendingAutosave = false;
@@ -887,13 +963,63 @@ export class NoteView {
       return '<p></p>';
     }
 
-    const escaped = markdown
-      .replace(/&/g, '&amp;')
-      .replace(/</g, '&lt;')
-      .replace(/>/g, '&gt;')
-      .replace(/\n/g, '<br>');
+    return markdown
+      .split('\n')
+      .map((line) => this.markdownLineToTipTap(line))
+      .join('');
+  }
 
-    return `<p>${escaped}</p>`;
+  private markdownLineToTipTap(line: string): string {
+    if (line.trim().length === 0) {
+      return '<p></p>';
+    }
+
+    const headingMatch = line.match(/^(#{1,6})\s+/);
+    const escapedLine = this.escapeHtml(line);
+    const styledLine = this.applyInlineMarkdownStyles(escapedLine);
+
+    if (headingMatch) {
+      const level = headingMatch[1].length;
+      return `<h${level}>${styledLine}</h${level}>`;
+    }
+
+    const blockQuoteMatch = line.match(/^>\s?/);
+    if (blockQuoteMatch) {
+      return `<blockquote><p>${styledLine}</p></blockquote>`;
+    }
+
+    return `<p>${styledLine}</p>`;
+  }
+
+  private applyInlineMarkdownStyles(escapedLine: string): string {
+    if (!escapedLine) {
+      return escapedLine;
+    }
+
+    const styledSegments: string[] = [];
+    const toToken = (html: string): string => {
+      const token = `@@MDTOKEN${styledSegments.length}@@`;
+      styledSegments.push(html);
+      return token;
+    };
+
+    let withTokens = escapedLine.replace(/`[^`]+`/g, (match) => toToken(`<code>${match}</code>`));
+    withTokens = withTokens.replace(/(\*\*[^*]+\*\*|__[^_]+__)/g, (match) =>
+      toToken(`<strong>${match}</strong>`),
+    );
+    withTokens = withTokens.replace(/(~~[^~]+~~)/g, (match) => toToken(`<s>${match}</s>`));
+    withTokens = withTokens.replace(/(\*[^*\s][^*]*\*|_[^_\s][^_]*_)/g, (match) =>
+      toToken(`<em>${match}</em>`),
+    );
+
+    return withTokens.replace(/@@MDTOKEN(\d+)@@/g, (_, rawIndex: string) => {
+      const index = Number.parseInt(rawIndex, 10);
+      return Number.isFinite(index) ? (styledSegments[index] ?? '') : '';
+    });
+  }
+
+  private escapeHtml(value: string): string {
+    return value.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
   }
 
   private buildAnchor(content: string, startChar: number, endChar: number): CommentAnchor {
@@ -937,6 +1063,10 @@ export class NoteView {
 
   private renderEmpty(): void {
     this.clearAutosaveTimer();
+    if (this.markdownStylingTimer !== null) {
+      window.clearTimeout(this.markdownStylingTimer);
+      this.markdownStylingTimer = null;
+    }
     this.teardownActionsMenuListeners();
     this.currentNote = null;
     this.isSaving = false;
@@ -980,6 +1110,10 @@ export class NoteView {
 
   destroy(): void {
     this.clearAutosaveTimer();
+    if (this.markdownStylingTimer !== null) {
+      window.clearTimeout(this.markdownStylingTimer);
+      this.markdownStylingTimer = null;
+    }
     this.teardownActionsMenuListeners();
 
     if (this.editor) {
