@@ -504,6 +504,7 @@ export class NoteView {
     addTagButton.className = 'tag-add-btn';
     addTagButton.textContent = '+';
     addTagButton.setAttribute('aria-label', 'Add tag');
+    addTagButton.setAttribute('aria-haspopup', 'dialog');
     addTagButton.setAttribute('aria-expanded', 'false');
 
     const addTagPopover = document.createElement('div');
@@ -513,6 +514,26 @@ export class NoteView {
     addTagInput.className = 'tag-add-input';
     addTagInput.type = 'text';
     addTagInput.setAttribute('aria-label', 'New tag');
+    addTagInput.placeholder = 'Add a tag';
+
+    const positionPopover = (): void => {
+      const panelElement = addTagControl.closest<HTMLElement>('.note-view-panel');
+      if (!panelElement) {
+        return;
+      }
+
+      addTagPopover.style.left = '0';
+      addTagPopover.style.right = 'auto';
+
+      const panelRect = panelElement.getBoundingClientRect();
+      const popoverRect = addTagPopover.getBoundingClientRect();
+      const boundaryPadding = 8;
+
+      if (popoverRect.right > panelRect.right - boundaryPadding) {
+        addTagPopover.style.left = 'auto';
+        addTagPopover.style.right = '0';
+      }
+    };
 
     const closePopover = (): void => {
       addTagPopover.classList.add('hidden');
@@ -523,6 +544,7 @@ export class NoteView {
     const openPopover = (): void => {
       addTagPopover.classList.remove('hidden');
       addTagButton.setAttribute('aria-expanded', 'true');
+      positionPopover();
       window.setTimeout(() => addTagInput.focus(), 0);
     };
 
@@ -540,7 +562,7 @@ export class NoteView {
     });
 
     addTagInput.addEventListener('keydown', (event) => {
-      if (event.key === 'Enter' || event.key === ',') {
+      if (event.key === 'Enter') {
         event.preventDefault();
         submitTag();
         return;

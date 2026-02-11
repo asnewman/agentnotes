@@ -440,31 +440,49 @@
 }
 
 .tag-add-btn {
-  width: 22px;
-  height: 22px;
+  width: 24px;
+  height: 24px;
   border-radius: 999px;
   border: 1px solid var(--border-color);
-  background: transparent;
-  color: var(--text-muted);
-  font-size: 14px;
+  background: var(--bg-secondary);
+  color: var(--text-secondary);
+  font-size: 16px;
   line-height: 1;
   cursor: pointer;
-  opacity: 0.7;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  transition:
+    background-color 0.15s ease,
+    border-color 0.15s ease,
+    color 0.15s ease,
+    box-shadow 0.15s ease;
 }
 
 .tag-add-btn:hover {
-  opacity: 1;
-  color: var(--text-secondary);
+  background: var(--bg-hover);
+  color: var(--text-primary);
   border-color: var(--text-muted);
+}
+
+.tag-add-btn:focus-visible,
+.tag-add-btn[aria-expanded='true'] {
+  outline: none;
+  border-color: var(--accent-color);
+  box-shadow: 0 0 0 2px rgba(0, 120, 212, 0.25);
 }
 
 .tag-add-popover {
   position: absolute;
-  top: calc(100% + 6px);
-  left: 50%;
-  transform: translateX(-50%);
+  top: calc(100% + 8px);
+  left: 0;
   display: block;
   z-index: 20;
+  padding: 6px;
+  border: 1px solid var(--border-color);
+  border-radius: 8px;
+  background: var(--bg-secondary);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.32);
 }
 
 .tag-add-popover.hidden {
@@ -472,19 +490,25 @@
 }
 
 .tag-add-input {
-  width: 130px;
-  padding: 3px 8px;
+  width: 170px;
+  max-width: min(220px, calc(100vw - 40px));
+  padding: 6px 8px;
   border-radius: 6px;
-  border: none;
-  background-color: rgba(37, 37, 38, 0.72);
-  color: var(--text-muted);
+  border: 1px solid var(--border-color);
+  background-color: var(--bg-tertiary);
+  color: var(--text-primary);
   font-size: 12px;
+}
+
+.tag-add-input::placeholder {
+  color: var(--text-muted);
+  opacity: 0.75;
 }
 
 .tag-add-input:focus {
   outline: none;
-  background-color: rgba(45, 45, 48, 0.82);
-  color: var(--text-secondary);
+  border-color: var(--accent-color);
+  box-shadow: 0 0 0 2px rgba(0, 120, 212, 0.25);
 }
 
 /* Comments Panel */
