@@ -984,7 +984,7 @@ export class NoteView {
       return '<p></p>';
     }
 
-    const headingMatch = line.match(/^(#{1,6})\s+/);
+    const headingMatch = line.match(/^(#{1,6})\s+\S/);
     const escapedLine = this.escapeHtml(line);
     const styledLine = this.applyInlineMarkdownStyles(escapedLine);
 
