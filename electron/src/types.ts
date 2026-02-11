@@ -99,6 +99,10 @@ export interface CreateDirectoryPayload {
   path: string;
 }
 
+export interface DeleteDirectoryPayload {
+  path: string;
+}
+
 export interface PreloadApi {
   listNotes: () => Promise<NotesListResult>;
   getNote: (noteId: string) => Promise<Note | null>;
@@ -106,6 +110,7 @@ export interface PreloadApi {
   deleteNote: (noteId: string) => Promise<OperationResult>;
   moveNote: (noteId: string, directory: string) => Promise<CommentMutationResult>;
   createDirectory: (path: string) => Promise<DirectoryMutationResult>;
+  deleteDirectory: (path: string) => Promise<DirectoryMutationResult>;
   updateNote: (noteId: string, content: string) => Promise<CommentMutationResult>;
   updateNoteMetadata: (
     noteId: string,

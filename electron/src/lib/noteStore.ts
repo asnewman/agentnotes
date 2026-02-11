@@ -83,6 +83,16 @@ export async function createDirectory(path: string): Promise<DirectoryMutationRe
   return result;
 }
 
+export async function deleteDirectory(path: string): Promise<DirectoryMutationResult> {
+  const result = await window.api.deleteDirectory(path);
+
+  if (result.success) {
+    clearCache();
+  }
+
+  return result;
+}
+
 export async function updateNote(noteId: string, content: string): Promise<CommentMutationResult> {
   const result = await window.api.updateNote(noteId, content);
 

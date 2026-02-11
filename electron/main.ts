@@ -14,8 +14,9 @@ import type {
   CommentStatus,
   CreateDirectoryPayload,
   CreateNotePayload,
-  DeleteNotePayload,
   DeleteCommentPayload,
+  DeleteDirectoryPayload,
+  DeleteNotePayload,
   DirectoryMutationResult,
   MoveNotePayload,
   Note,
@@ -685,6 +686,14 @@ function isCreateDirectoryPayload(payload: unknown): payload is CreateDirectoryP
   return typeof payload.path === 'string';
 }
 
+function isDeleteDirectoryPayload(payload: unknown): payload is DeleteDirectoryPayload {
+  if (!isRecord(payload)) {
+    return false;
+  }
+
+  return typeof payload.path === 'string';
+}
+
 ipcMain.handle('notes:list', async (): Promise<NotesListResult> => {
   const notesDir = getNotesDir();
 
@@ -1071,6 +1080,56 @@ ipcMain.handle(
       return { success: true, path: normalizedPath };
     } catch (error) {
       console.error('Error creating directory:', error);
+      return {
+        success: false,
+        error: error instanceof Error ? error.message : 'Unknown error',
+      };
+    }
+  },
+);
+
+ipcMain.handle(
+  'directory:delete',
+  async (_event, payload: unknown): Promise<DirectoryMutationResult> => {
+    if (!isDeleteDirectoryPayload(payload)) {
+      return { success: false, error: 'Invalid delete directory payload' };
+    }
+
+    const notesDir = getNotesDir();
+    if (!notesDir || !fs.existsSync(notesDir)) {
+      return { success: false, error: 'Notes directory not found' };
+    }
+
+    const normalizedPath = normalizeDirectoryInput(payload.path);
+    if (normalizedPath === null || !normalizedPath) {
+      return { success: false, error: 'Invalid directory path' };
+    }
+
+    const targetPath = resolveNotesPath(notesDir, normalizedPath);
+    if (!targetPath || path.resolve(targetPath) === path.resolve(notesDir)) {
+      return { success: false, error: 'Directory path escapes notes root' };
+    }
+
+    if (!fs.existsSync(targetPath)) {
+      return { success: false, error: 'Directory not found' };
+    }
+
+    try {
+      const stats = fs.statSync(targetPath);
+      if (!stats.isDirectory()) {
+        return { success: false, error: 'Target path is not a directory' };
+      }
+
+      fs.rmSync(targetPath, { recursive: true, force: false });
+
+      const parentDir = path.dirname(targetPath);
+      if (path.resolve(parentDir) !== path.resolve(notesDir)) {
+        cleanupEmptyParentDirectories(parentDir, notesDir);
+      }
+
+      return { success: true, path: normalizedPath };
+    } catch (error) {
+      console.error('Error deleting directory:', error);
       return {
         success: false,
         error: error instanceof Error ? error.message : 'Unknown error',

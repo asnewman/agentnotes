@@ -7,6 +7,7 @@ import {
   createDirectory,
   createNote,
   deleteComment,
+  deleteDirectory,
   deleteNote,
   getDirectory,
   listNotes,
@@ -413,6 +414,33 @@ async function onCreateDirectory(targetDirectory: string): Promise<void> {
   }
 }
 
+async function onDeleteDirectory(targetDirectory: string): Promise<void> {
+  if (!targetDirectory) {
+    return;
+  }
+
+  const shouldDelete = window.confirm(
+    `Delete folder "${targetDirectory}"? All notes inside this folder and its subfolders will be deleted. This cannot be undone.`,
+  );
+  if (!shouldDelete) {
+    return;
+  }
+
+  try {
+    const result = await deleteDirectory(targetDirectory);
+
+    if (!result.success) {
+      window.alert(result.error ?? 'Failed to delete directory.');
+      return;
+    }
+
+    await loadNotes(currentNoteId);
+  } catch (error) {
+    console.error('Error deleting directory:', error);
+    window.alert('Failed to delete directory.');
+  }
+}
+
 async function onMoveNote(note: Note, targetDirectory: string): Promise<void> {
   if (targetDirectory === note.directory) {
     return;
@@ -558,6 +586,7 @@ async function init(): Promise<void> {
     onMoveNote,
     onCreateNote,
     onCreateDirectory,
+    onDeleteDirectory,
   });
   noteView = new NoteView(noteHeaderContainer, noteContentContainer);
   commentsPanel = new CommentsPanel(commentsListContainer);

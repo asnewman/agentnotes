@@ -20,6 +20,7 @@ interface NoteListCallbacks {
   onMoveNote: (note: Note, targetDirectory: string) => void | Promise<void>;
   onCreateNote: (targetDirectory: string) => void | Promise<void>;
   onCreateDirectory: (targetDirectory: string) => void | Promise<void>;
+  onDeleteDirectory: (targetDirectory: string) => void | Promise<void>;
 }
 
 function parseDate(value: string): number {
@@ -249,7 +250,8 @@ export class NoteList {
     this.container.addEventListener('contextmenu', (event) => {
       event.preventDefault();
       const targetDirectory = this.resolveTargetDirectory(event.target);
-      this.showContextMenu(event.clientX, event.clientY, targetDirectory);
+      const isDirectoryContext = this.isDirectoryContextTarget(event.target);
+      this.showContextMenu(event.clientX, event.clientY, targetDirectory, isDirectoryContext);
     });
 
     this.container.addEventListener('dragover', (event) => {
@@ -332,7 +334,27 @@ export class NoteList {
     return '';
   }
 
-  private showContextMenu(x: number, y: number, targetDirectory: string): void {
+  private isDirectoryContextTarget(target: EventTarget | null): boolean {
+    if (!(target instanceof Element)) {
+      return false;
+    }
+
+    if (target.closest('.note-item[data-note-id]')) {
+      return false;
+    }
+
+    return Boolean(
+      target.closest('.directory-item[data-path]') ||
+      target.closest('.directory-children[data-path]'),
+    );
+  }
+
+  private showContextMenu(
+    x: number,
+    y: number,
+    targetDirectory: string,
+    isDirectoryContext: boolean,
+  ): void {
     this.hideContextMenu();
 
     const menu = document.createElement('div');
@@ -352,6 +374,9 @@ export class NoteList {
 
     addAction('New Note', () => this.callbacks.onCreateNote(targetDirectory));
     addAction('New Folder', () => this.callbacks.onCreateDirectory(targetDirectory));
+    if (isDirectoryContext && targetDirectory) {
+      addAction('Delete Folder', () => this.callbacks.onDeleteDirectory(targetDirectory));
+    }
 
     document.body.appendChild(menu);
     this.contextMenu = menu;
