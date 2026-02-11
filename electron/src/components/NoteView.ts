@@ -49,6 +49,7 @@ export class NoteView {
   private lastSavedContent: string;
   private isApplyingContent: boolean;
   private markdownStylingTimer: number | null;
+  private contentBackgroundMouseHandler: ((event: MouseEvent) => void) | null;
   private actionsMenuDismissHandler: ((event: MouseEvent) => void) | null;
   private actionsMenuKeyHandler: ((event: KeyboardEvent) => void) | null;
 
@@ -72,6 +73,15 @@ export class NoteView {
     this.lastSavedContent = '';
     this.isApplyingContent = false;
     this.markdownStylingTimer = null;
+    this.contentBackgroundMouseHandler = (event: MouseEvent) => {
+      if (event.button !== 0 || !this.editor || event.target !== this.contentContainer) {
+        return;
+      }
+
+      event.preventDefault();
+      this.editor.chain().focus('end').run();
+    };
+    this.contentContainer.addEventListener('mousedown', this.contentBackgroundMouseHandler);
     this.actionsMenuDismissHandler = null;
     this.actionsMenuKeyHandler = null;
   }
@@ -1129,6 +1139,11 @@ export class NoteView {
     if (this.lastSavedOverlay) {
       this.lastSavedOverlay.remove();
       this.lastSavedOverlay = null;
+    }
+
+    if (this.contentBackgroundMouseHandler) {
+      this.contentContainer.removeEventListener('mousedown', this.contentBackgroundMouseHandler);
+      this.contentBackgroundMouseHandler = null;
     }
   }
 }
