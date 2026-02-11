@@ -105,10 +105,18 @@ html, body {
   justify-content: flex-end;
   gap: 8px;
   padding-right: 8px;
+  -webkit-app-region: no-drag;
 }
 
 .title-bar-directory.hidden {
   display: none;
+}
+
+.title-bar-panel-controls {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  margin-right: 2px;
 }
 
 .directory-path {
@@ -140,9 +148,17 @@ html, body {
 
 .app {
   display: flex;
+  flex-direction: column;
   height: calc(100vh - 32px);
   overflow: hidden;
   background-color: transparent;
+}
+
+.app-panels {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  overflow: hidden;
 }
 
 /* Panel layout - Note list: 20%, Content: 50%, Comments: 30% */
@@ -156,6 +172,7 @@ html, body {
   display: flex;
   flex-direction: column;
   overflow: hidden;
+  transition: width 0.18s ease, min-width 0.18s ease, border-color 0.18s ease, opacity 0.12s ease;
 }
 
 .note-view-panel {
@@ -176,6 +193,81 @@ html, body {
   display: flex;
   flex-direction: column;
   overflow: hidden;
+  transition: width 0.18s ease, min-width 0.18s ease, border-color 0.18s ease, opacity 0.12s ease;
+}
+
+.app.note-list-collapsed .note-list-panel {
+  width: 0;
+  min-width: 0;
+  border-right-width: 0;
+  opacity: 0;
+  pointer-events: none;
+}
+
+.app.comments-collapsed .comments-panel {
+  width: 0;
+  min-width: 0;
+  border-left-width: 0;
+  opacity: 0;
+  pointer-events: none;
+}
+
+.panel-toggle-btn {
+  width: 24px;
+  height: 22px;
+  padding: 0;
+  border: 1px solid transparent;
+  border-radius: 6px;
+  background: transparent;
+  color: rgba(255, 255, 255, 0.78);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  -webkit-app-region: no-drag;
+  cursor: pointer;
+  opacity: 0.88;
+  transition: color 0.15s ease, opacity 0.15s ease, background-color 0.15s ease, border-color 0.15s ease;
+}
+
+.panel-toggle-icon {
+  width: 16px;
+  height: 16px;
+}
+
+.panel-toggle-icon .panel-outline,
+.panel-toggle-icon .panel-divider {
+  stroke: currentColor;
+  stroke-width: 1.25;
+  fill: none;
+  opacity: 0.95;
+}
+
+.panel-toggle-icon .panel-side-fill {
+  fill: currentColor;
+  opacity: 0.9;
+  transition: opacity 0.15s ease;
+}
+
+.panel-toggle-btn.panel-toggle-btn-collapsed .panel-side-fill {
+  opacity: 0.06;
+}
+
+.panel-toggle-btn:focus-visible {
+  opacity: 1;
+  color: rgba(255, 255, 255, 0.92);
+  background: rgba(255, 255, 255, 0.06);
+}
+
+.panel-toggle-btn:hover {
+  opacity: 1;
+  color: rgba(255, 255, 255, 0.98);
+  background: rgba(255, 255, 255, 0.08);
+  border-color: rgba(255, 255, 255, 0.12);
+}
+
+.panel-toggle-btn:focus-visible {
+  outline: none;
+  border-color: var(--accent-color);
 }
 
 .panel-header {

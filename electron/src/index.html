@@ -26,6 +26,36 @@
     </div>
     <div class="title-bar-title">AgentNotes</div>
     <div class="title-bar-directory hidden" id="titleBarDirectory">
+      <div class="title-bar-panel-controls">
+        <button
+          type="button"
+          class="panel-toggle-btn"
+          id="toggleNoteListBtn"
+          aria-label="Hide notes list"
+          aria-expanded="true"
+          title="Hide notes list"
+        >
+          <svg class="panel-toggle-icon panel-toggle-icon-left" viewBox="0 0 16 16" aria-hidden="true">
+            <rect class="panel-outline" x="1.5" y="2.5" width="13" height="11" rx="2"></rect>
+            <line class="panel-divider" x1="6.6" y1="2.8" x2="6.6" y2="13.2"></line>
+            <rect class="panel-side-fill" x="2.4" y="3.4" width="3.3" height="9.2" rx="1"></rect>
+          </svg>
+        </button>
+        <button
+          type="button"
+          class="panel-toggle-btn"
+          id="toggleCommentsBtn"
+          aria-label="Hide comments panel"
+          aria-expanded="true"
+          title="Hide comments panel"
+        >
+          <svg class="panel-toggle-icon panel-toggle-icon-right" viewBox="0 0 16 16" aria-hidden="true">
+            <rect class="panel-outline" x="1.5" y="2.5" width="13" height="11" rx="2"></rect>
+            <line class="panel-divider" x1="9.4" y1="2.8" x2="9.4" y2="13.2"></line>
+            <rect class="panel-side-fill" x="10.3" y="3.4" width="3.3" height="9.2" rx="1"></rect>
+          </svg>
+        </button>
+      </div>
       <span class="directory-path" id="directoryPath"></span>
       <button class="change-directory-btn" id="changeDirectoryBtn">Change</button>
     </div>
@@ -43,35 +73,37 @@
   </div>
 
   <div class="app">
-    <aside class="note-list-panel" id="noteListPanel">
-      <div class="panel-header">
-        <h2>Notes</h2>
-      </div>
-      <div class="note-list" id="noteList">
-        <!-- Notes will be rendered here -->
-      </div>
-    </aside>
+    <div class="app-panels">
+      <aside class="note-list-panel" id="noteListPanel">
+        <div class="panel-header">
+          <h2>Notes</h2>
+        </div>
+        <div class="note-list" id="noteList">
+          <!-- Notes will be rendered here -->
+        </div>
+      </aside>
 
-    <main class="note-view-panel" id="noteViewPanel">
-      <div class="note-header" id="noteHeader">
-        <h1 class="note-title">Select a note</h1>
-        <div class="note-meta"></div>
-        <div class="note-tags"></div>
-        <div class="note-actions"></div>
-      </div>
-      <div class="note-content" id="noteContent">
-        <p class="empty-state">Select a note from the list to view its content.</p>
-      </div>
-    </main>
+      <main class="note-view-panel" id="noteViewPanel">
+        <div class="note-header" id="noteHeader">
+          <h1 class="note-title">Select a note</h1>
+          <div class="note-meta"></div>
+          <div class="note-tags"></div>
+          <div class="note-actions"></div>
+        </div>
+        <div class="note-content" id="noteContent">
+          <p class="empty-state">Select a note from the list to view its content.</p>
+        </div>
+      </main>
 
-    <aside class="comments-panel" id="commentsPanel">
-      <div class="panel-header">
-        <h2>Comments</h2>
-      </div>
-      <div class="comments-list" id="commentsList">
-        <p class="empty-state">No comments</p>
-      </div>
-    </aside>
+      <aside class="comments-panel" id="commentsPanel">
+        <div class="panel-header">
+          <h2>Comments</h2>
+        </div>
+        <div class="comments-list" id="commentsList">
+          <p class="empty-state">No comments</p>
+        </div>
+      </aside>
+    </div>
   </div>
 
   <script src="bundle.js"></script>

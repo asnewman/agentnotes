@@ -27,6 +27,10 @@ let directoryOverlay: HTMLElement | null = null;
 let appElement: HTMLElement | null = null;
 let titleBarDirectory: HTMLElement | null = null;
 let directoryPath: HTMLElement | null = null;
+let toggleNoteListButton: HTMLButtonElement | null = null;
+let toggleCommentsButton: HTMLButtonElement | null = null;
+let isNoteListVisible = true;
+let isCommentsVisible = true;
 
 interface TextInputDialogOptions {
   title: string;
@@ -181,6 +185,52 @@ function requireElementBySelector<T extends HTMLElement>(selector: string): T {
   }
 
   return element as T;
+}
+
+function updatePanelToggleButtons(): void {
+  if (toggleNoteListButton) {
+    const notesLabel = isNoteListVisible ? 'Hide notes list' : 'Show notes list';
+    toggleNoteListButton.classList.toggle('panel-toggle-btn-collapsed', !isNoteListVisible);
+    toggleNoteListButton.title = notesLabel;
+    toggleNoteListButton.setAttribute('aria-label', notesLabel);
+    toggleNoteListButton.setAttribute('aria-expanded', String(isNoteListVisible));
+  }
+
+  if (toggleCommentsButton) {
+    const commentsLabel = isCommentsVisible ? 'Hide comments panel' : 'Show comments panel';
+    toggleCommentsButton.classList.toggle('panel-toggle-btn-collapsed', !isCommentsVisible);
+    toggleCommentsButton.title = commentsLabel;
+    toggleCommentsButton.setAttribute('aria-label', commentsLabel);
+    toggleCommentsButton.setAttribute('aria-expanded', String(isCommentsVisible));
+  }
+}
+
+function setNoteListVisible(visible: boolean): void {
+  isNoteListVisible = visible;
+  appElement?.classList.toggle('note-list-collapsed', !visible);
+  updatePanelToggleButtons();
+}
+
+function setCommentsVisible(visible: boolean): void {
+  isCommentsVisible = visible;
+  appElement?.classList.toggle('comments-collapsed', !visible);
+  updatePanelToggleButtons();
+}
+
+function initPanelToggles(): void {
+  toggleNoteListButton = requireElementById<HTMLButtonElement>('toggleNoteListBtn');
+  toggleCommentsButton = requireElementById<HTMLButtonElement>('toggleCommentsBtn');
+
+  toggleNoteListButton.addEventListener('click', () => {
+    setNoteListVisible(!isNoteListVisible);
+  });
+
+  toggleCommentsButton.addEventListener('click', () => {
+    setCommentsVisible(!isCommentsVisible);
+  });
+
+  setNoteListVisible(true);
+  setCommentsVisible(true);
 }
 
 function initTitleBar(): void {
@@ -565,6 +615,7 @@ async function init(): Promise<void> {
 
   directoryOverlay = requireElementById<HTMLElement>('directoryOverlay');
   appElement = requireElementBySelector<HTMLElement>('.app');
+  initPanelToggles();
   titleBarDirectory = requireElementById<HTMLElement>('titleBarDirectory');
   directoryPath = requireElementById<HTMLElement>('directoryPath');
 
