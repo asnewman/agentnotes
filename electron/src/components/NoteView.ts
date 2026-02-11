@@ -396,7 +396,7 @@ export class NoteView {
 
     this.isApplyingContent = true;
     try {
-      editor.commands.setContent(normalizedHtml, false);
+      editor.commands.setContent(normalizedHtml, false, { preserveWhitespace: 'full' });
 
       const anchorPosition = this.plainTextOffsetToDocPosition(editor, anchorOffset);
       const headPosition = this.plainTextOffsetToDocPosition(editor, headOffset);
@@ -960,7 +960,7 @@ export class NoteView {
     const content = this.markdownToTipTap(note.content);
     this.isApplyingContent = true;
     try {
-      this.editor.commands.setContent(content);
+      this.editor.commands.setContent(content, false, { preserveWhitespace: 'full' });
     } finally {
       this.isApplyingContent = false;
     }
