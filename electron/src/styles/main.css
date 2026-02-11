@@ -105,7 +105,6 @@ html, body {
   justify-content: flex-end;
   gap: 8px;
   padding-right: 8px;
-  -webkit-app-region: no-drag;
 }
 
 .title-bar-directory.hidden {
@@ -131,6 +130,7 @@ html, body {
   color: var(--text-secondary);
   cursor: pointer;
   transition: background-color 0.15s, border-color 0.15s;
+  -webkit-app-region: no-drag;
 }
 
 .change-directory-btn:hover {

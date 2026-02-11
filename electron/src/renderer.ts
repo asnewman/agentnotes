@@ -203,10 +203,13 @@ function initTitleBar(): void {
 
   titleBar.addEventListener('dblclick', (event) => {
     const target = event.target;
-    if (
-      target === titleBar ||
-      (target instanceof Element && target.classList.contains('title-bar-title'))
-    ) {
+    const isInteractiveControl =
+      target instanceof Element &&
+      (target.closest('.title-bar-controls') !== null ||
+        target.closest('.title-bar-panel-controls') !== null ||
+        target.closest('.change-directory-btn') !== null);
+
+    if (!isInteractiveControl) {
       window.api.windowMaximize();
     }
   });
