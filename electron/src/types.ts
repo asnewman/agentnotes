@@ -37,6 +37,7 @@ export interface Note {
 
 export interface NotesListResult {
   notes: Note[];
+  directories: string[];
   noDirectory: boolean;
 }
 

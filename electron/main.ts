@@ -485,6 +485,28 @@ function getAllMarkdownFiles(dir: string, baseDir = dir): MarkdownFileRecord[] {
   return files;
 }
 
+function getAllDirectories(dir: string, baseDir = dir): string[] {
+  const directories: string[] = [];
+
+  if (!fs.existsSync(dir)) {
+    return directories;
+  }
+
+  const entries = fs.readdirSync(dir, { withFileTypes: true });
+
+  for (const entry of entries) {
+    if (!entry.isDirectory()) {
+      continue;
+    }
+
+    const fullPath = path.join(dir, entry.name);
+    directories.push(formatRelativePath(path.relative(baseDir, fullPath)));
+    directories.push(...getAllDirectories(fullPath, baseDir));
+  }
+
+  return directories;
+}
+
 function getRelativePathFromNotesDir(notesDir: string, fullPath: string): string {
   return formatRelativePath(path.relative(notesDir, fullPath));
 }
@@ -667,25 +689,28 @@ ipcMain.handle('notes:list', async (): Promise<NotesListResult> => {
   const notesDir = getNotesDir();
 
   if (!notesDir) {
-    return { notes: [], noDirectory: true };
+    return { notes: [], directories: [], noDirectory: true };
   }
 
   if (!fs.existsSync(notesDir)) {
-    return { notes: [], noDirectory: false };
+    return { notes: [], directories: [], noDirectory: false };
   }
 
   try {
     const files = getAllMarkdownFiles(notesDir);
+    const directories = Array.from(new Set(getAllDirectories(notesDir))).sort((a, b) =>
+      a.localeCompare(b),
+    );
 
     const notes = files
       .map(({ fullPath, relativePath }) => parseNoteFile(fullPath, relativePath))
       .filter((note): note is Note => note !== null)
       .sort(compareNotesByCreated);
 
-    return { notes, noDirectory: false };
+    return { notes, directories, noDirectory: false };
   } catch (error) {
     console.error('Error listing notes:', error);
-    return { notes: [], noDirectory: false };
+    return { notes: [], directories: [], noDirectory: false };
   }
 });
 

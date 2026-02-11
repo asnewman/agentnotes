@@ -46,37 +46,41 @@ function compareNotesByCreated(a: Note, b: Note): number {
   return a.id.localeCompare(b.id);
 }
 
-function buildNoteTree(notes: Note[]): TreeNode[] {
+function buildNoteTree(notes: Note[], directories: string[]): TreeNode[] {
   const tree: TreeNode[] = [];
   const dirMap = new Map<string, DirectoryNode>();
 
-  const sortedNotes = [...notes].sort((a, b) => {
-    if (!a.directory && b.directory) {
-      return 1;
+  const normalizeDirectoryPath = (value: string): string => {
+    const normalized = value.trim().replace(/\\/g, '/').replace(/^\/+|\/+$/g, '');
+    if (!normalized) {
+      return '';
     }
 
-    if (a.directory && !b.directory) {
-      return -1;
+    const segments = normalized
+      .split('/')
+      .map((segment) => segment.trim())
+      .filter((segment) => segment.length > 0 && segment !== '.' && segment !== '..');
+
+    return segments.join('/');
+  };
+
+  const ensureDirectory = (dirPath: string): DirectoryNode | null => {
+    const normalizedPath = normalizeDirectoryPath(dirPath);
+    if (!normalizedPath) {
+      return null;
     }
 
-    return compareNotesByCreated(a, b);
-  });
-
-  for (const note of sortedNotes) {
-    if (!note.directory) {
-      tree.push({ type: 'note', note });
-      continue;
-    }
-
-    const parts = note.directory.split('/');
+    const parts = normalizedPath.split('/');
     let currentPath = '';
     let currentLevel = tree;
+    let currentNode: DirectoryNode | null = null;
 
     for (const part of parts) {
       currentPath = currentPath ? `${currentPath}/${part}` : part;
+      let dirNode = dirMap.get(currentPath);
 
-      if (!dirMap.has(currentPath)) {
-        const dirNode: DirectoryNode = {
+      if (!dirNode) {
+        dirNode = {
           type: 'directory',
           name: part,
           path: currentPath,
@@ -88,10 +92,31 @@ function buildNoteTree(notes: Note[]): TreeNode[] {
         currentLevel.push(dirNode);
       }
 
-      currentLevel = dirMap.get(currentPath)?.children ?? currentLevel;
+      currentNode = dirNode;
+      currentLevel = dirNode.children;
     }
 
-    currentLevel.push({ type: 'note', note });
+    return currentNode;
+  };
+
+  for (const directory of directories) {
+    ensureDirectory(directory);
+  }
+
+  const sortedNotes = [...notes].sort(compareNotesByCreated);
+  for (const note of sortedNotes) {
+    if (!note.directory) {
+      tree.push({ type: 'note', note });
+      continue;
+    }
+
+    const parent = ensureDirectory(note.directory);
+    if (!parent) {
+      tree.push({ type: 'note', note });
+      continue;
+    }
+
+    parent.children.push({ type: 'note', note });
   }
 
   function sortLevel(items: TreeNode[]): void {
@@ -375,9 +400,16 @@ export class NoteList {
     void this.callbacks.onMoveNote(note, targetDirectory);
   }
 
-  render(notes: Note[]): void {
+  render(notes: Note[], directories: string[] = []): void {
     if (!Array.isArray(notes)) {
       console.error('NoteList.render expected an array of notes, received:', notes);
+      this.notes = [];
+      this.container.innerHTML = '<p class="empty-state">No notes found</p>';
+      return;
+    }
+
+    if (!Array.isArray(directories)) {
+      console.error('NoteList.render expected an array of directories, received:', directories);
       this.notes = [];
       this.container.innerHTML = '<p class="empty-state">No notes found</p>';
       return;
@@ -386,7 +418,7 @@ export class NoteList {
     this.notes = notes;
     this.container.innerHTML = '';
 
-    if (notes.length === 0) {
+    if (notes.length === 0 && directories.length === 0) {
       const empty = document.createElement('p');
       empty.className = 'empty-state';
       empty.textContent = 'No notes found';
@@ -394,7 +426,7 @@ export class NoteList {
       return;
     }
 
-    const tree = buildNoteTree(notes);
+    const tree = buildNoteTree(notes, directories);
     this.initExpandedState(tree);
     this.renderTree(tree, this.container, 0);
   }

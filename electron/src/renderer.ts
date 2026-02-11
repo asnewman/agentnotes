@@ -48,6 +48,14 @@ function extractNotes(result: NotesListResponse): Note[] {
   return result.notes;
 }
 
+function extractDirectories(result: NotesListResponse): string[] {
+  if (Array.isArray(result)) {
+    return [];
+  }
+
+  return Array.isArray(result.directories) ? result.directories : [];
+}
+
 function joinDirectoryPath(baseDirectory: string, relativePath: string): string {
   const base = baseDirectory.trim().replace(/^\/+|\/+$/g, '');
   const child = relativePath.trim().replace(/^\/+|\/+$/g, '');
@@ -239,8 +247,10 @@ async function onCommentSubmit(content: string, anchor: CommentAnchor): Promise<
     noteView?.render(result.note);
     commentsPanel?.render(result.note.comments);
 
-    const notes = extractNotes(await listNotes());
-    noteList?.render(notes);
+    const notesResult = await listNotes();
+    const notes = extractNotes(notesResult);
+    const directories = extractDirectories(notesResult);
+    noteList?.render(notes, directories);
     noteList?.selectNote(currentNoteId);
   } catch (error) {
     console.error('Error adding comment:', error);
@@ -265,8 +275,10 @@ async function onCommentDelete(commentId: string): Promise<void> {
     noteView?.render(result.note);
     commentsPanel?.render(result.note.comments);
 
-    const notes = extractNotes(await listNotes());
-    noteList?.render(notes);
+    const notesResult = await listNotes();
+    const notes = extractNotes(notesResult);
+    const directories = extractDirectories(notesResult);
+    noteList?.render(notes, directories);
     noteList?.selectNote(currentNoteId);
   } catch (error) {
     console.error('Error deleting comment:', error);
@@ -289,8 +301,10 @@ async function onNoteSave(noteId: string, content: string): Promise<Note | null>
       commentsPanel?.render(result.note.comments);
     }
 
-    const notes = extractNotes(await listNotes());
-    noteList?.render(notes);
+    const notesResult = await listNotes();
+    const notes = extractNotes(notesResult);
+    const directories = extractDirectories(notesResult);
+    noteList?.render(notes, directories);
 
     return result.note;
   } catch (error) {
@@ -315,8 +329,10 @@ async function onNoteMetadataSave(noteId: string, title: string, tags: string[])
       commentsPanel?.render(result.note.comments);
     }
 
-    const notes = extractNotes(await listNotes());
-    noteList?.render(notes);
+    const notesResult = await listNotes();
+    const notes = extractNotes(notesResult);
+    const directories = extractDirectories(notesResult);
+    noteList?.render(notes, directories);
 
     return result.note;
   } catch (error) {
@@ -481,6 +497,7 @@ async function loadNotes(preferredNoteId: string | null = currentNoteId): Promis
   try {
     const result = await listNotes();
     const notes = extractNotes(result);
+    const directories = extractDirectories(result);
 
     if (isNotesListResult(result) && result.noDirectory) {
       noteListContainer.innerHTML = '<p class="empty-state">No directory configured</p>';
@@ -490,7 +507,7 @@ async function loadNotes(preferredNoteId: string | null = currentNoteId): Promis
       return;
     }
 
-    noteList?.render(notes);
+    noteList?.render(notes, directories);
 
     if (notes.length > 0) {
       const fallbackNoteId = notes[0]?.id ?? null;
