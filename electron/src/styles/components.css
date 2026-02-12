@@ -293,6 +293,13 @@
   padding: 24px 24px 46px;
 }
 
+.note-content > * {
+  width: 100%;
+  max-width: 600px;
+  margin-left: auto;
+  margin-right: auto;
+}
+
 .note-last-saved-overlay {
   position: absolute;
   right: 16px;
