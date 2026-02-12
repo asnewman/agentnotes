@@ -10,6 +10,27 @@ const CommentHighlight = Highlight.extend({
   inclusive: false,
 });
 
+const TITLE_CASE_SMALL_WORDS = new Set([
+  'a',
+  'an',
+  'and',
+  'as',
+  'at',
+  'but',
+  'by',
+  'for',
+  'in',
+  'nor',
+  'of',
+  'on',
+  'or',
+  'per',
+  'the',
+  'to',
+  'vs',
+  'via',
+]);
+
 interface CurrentSelection {
   anchor: CommentAnchor;
   text: string;
@@ -52,6 +73,17 @@ export class NoteView {
   private contentBackgroundMouseHandler: ((event: MouseEvent) => void) | null;
   private actionsMenuDismissHandler: ((event: MouseEvent) => void) | null;
   private actionsMenuKeyHandler: ((event: KeyboardEvent) => void) | null;
+  private headingActionButton: HTMLButtonElement | null;
+  private headingActionMenu: HTMLDivElement | null;
+  private headingActionTarget: HTMLElement | null;
+  private headingMouseMoveHandler: ((event: MouseEvent) => void) | null;
+  private headingMouseLeaveHandler: (() => void) | null;
+  private headingScrollHandler: (() => void) | null;
+  private headingResizeHandler: (() => void) | null;
+  private headingMenuDismissHandler: ((event: MouseEvent) => void) | null;
+  private headingMenuKeyHandler: ((event: KeyboardEvent) => void) | null;
+  private isHeadingMenuOpen: boolean;
+  private headingActionHideTimer: number | null;
 
   constructor(headerContainer: HTMLElement, contentContainer: HTMLElement) {
     this.headerContainer = headerContainer;
@@ -84,6 +116,17 @@ export class NoteView {
     this.contentContainer.addEventListener('mousedown', this.contentBackgroundMouseHandler);
     this.actionsMenuDismissHandler = null;
     this.actionsMenuKeyHandler = null;
+    this.headingActionButton = null;
+    this.headingActionMenu = null;
+    this.headingActionTarget = null;
+    this.headingMouseMoveHandler = null;
+    this.headingMouseLeaveHandler = null;
+    this.headingScrollHandler = null;
+    this.headingResizeHandler = null;
+    this.headingMenuDismissHandler = null;
+    this.headingMenuKeyHandler = null;
+    this.isHeadingMenuOpen = false;
+    this.headingActionHideTimer = null;
   }
 
   setOnCommentCreate(callback: CommentCreateHandler): void {
@@ -107,6 +150,7 @@ export class NoteView {
       this.editor.destroy();
     }
 
+    this.teardownHeadingActionControls();
     this.contentContainer.innerHTML = '';
 
     const editorElement = document.createElement('div');
@@ -134,6 +178,8 @@ export class NoteView {
         this.handleEditorUpdate(editor);
       },
     });
+
+    this.ensureHeadingActionControls();
 
     editorElement.addEventListener('keydown', (event) => {
       const isSaveShortcut = (event.metaKey || event.ctrlKey) && event.key.toLowerCase() === 's';
@@ -251,6 +297,439 @@ export class NoteView {
     window.getSelection()?.removeAllRanges();
   }
 
+  private ensureHeadingActionControls(): void {
+    if (this.headingActionButton && this.headingActionMenu) {
+      return;
+    }
+
+    const actionButton = document.createElement('button');
+    actionButton.type = 'button';
+    actionButton.className = 'heading-action-btn hidden';
+    actionButton.innerHTML =
+      '<svg class="heading-action-btn-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M9 18h6m-5 3h4m-4.3-6.4c-.53-1.02-1.36-1.9-2.03-2.9A6.5 6.5 0 0 1 17.6 4.2a6.5 6.5 0 0 1 .73 7.5c-.66 1-1.5 1.88-2.03 2.9-.2.38-.3.8-.3 1.2H10c0-.4-.1-.82-.3-1.2Z" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/></svg>';
+    actionButton.setAttribute('aria-label', 'Heading actions');
+    actionButton.setAttribute('aria-haspopup', 'menu');
+    actionButton.setAttribute('aria-expanded', 'false');
+    actionButton.addEventListener('mousedown', (event) => {
+      event.preventDefault();
+    });
+    actionButton.addEventListener('mouseenter', () => {
+      this.cancelHeadingActionHide();
+    });
+    actionButton.addEventListener('mouseleave', () => {
+      if (!this.isHeadingMenuOpen) {
+        this.scheduleHeadingActionHide();
+      }
+    });
+    actionButton.addEventListener('click', (event) => {
+      event.preventDefault();
+      event.stopPropagation();
+
+      if (this.isHeadingMenuOpen) {
+        this.closeHeadingActionMenu();
+      } else {
+        this.openHeadingActionMenu();
+      }
+    });
+
+    const actionMenu = document.createElement('div');
+    actionMenu.className = 'heading-action-menu';
+    actionMenu.setAttribute('role', 'menu');
+
+    const titleCaseButton = document.createElement('button');
+    titleCaseButton.type = 'button';
+    titleCaseButton.className = 'heading-action-menu-item';
+    titleCaseButton.textContent = 'Title Case Heading';
+    titleCaseButton.setAttribute('role', 'menuitem');
+    titleCaseButton.addEventListener('click', (event) => {
+      event.preventDefault();
+      event.stopPropagation();
+      this.formatHeadingToTitleCase();
+    });
+
+    actionMenu.addEventListener('mousedown', (event) => {
+      event.stopPropagation();
+    });
+    actionMenu.addEventListener('mouseenter', () => {
+      this.cancelHeadingActionHide();
+    });
+    actionMenu.addEventListener('mouseleave', () => {
+      if (!this.isHeadingMenuOpen) {
+        this.scheduleHeadingActionHide();
+      }
+    });
+    actionMenu.append(titleCaseButton);
+
+    this.contentContainer.append(actionButton, actionMenu);
+    this.headingActionButton = actionButton;
+    this.headingActionMenu = actionMenu;
+
+    this.headingMouseMoveHandler = (event: MouseEvent) => {
+      this.handleHeadingMouseMove(event);
+    };
+    this.headingMouseLeaveHandler = () => {
+      this.handleHeadingMouseLeave();
+    };
+    this.headingScrollHandler = () => {
+      this.positionHeadingActionButton();
+    };
+    this.headingResizeHandler = () => {
+      this.positionHeadingActionButton();
+    };
+
+    this.contentContainer.addEventListener('mousemove', this.headingMouseMoveHandler);
+    this.contentContainer.addEventListener('mouseleave', this.headingMouseLeaveHandler);
+    this.contentContainer.addEventListener('scroll', this.headingScrollHandler);
+    window.addEventListener('resize', this.headingResizeHandler);
+  }
+
+  private teardownHeadingActionControls(): void {
+    this.cancelHeadingActionHide();
+    this.closeHeadingActionMenu();
+
+    if (this.headingMouseMoveHandler) {
+      this.contentContainer.removeEventListener('mousemove', this.headingMouseMoveHandler);
+      this.headingMouseMoveHandler = null;
+    }
+
+    if (this.headingMouseLeaveHandler) {
+      this.contentContainer.removeEventListener('mouseleave', this.headingMouseLeaveHandler);
+      this.headingMouseLeaveHandler = null;
+    }
+
+    if (this.headingScrollHandler) {
+      this.contentContainer.removeEventListener('scroll', this.headingScrollHandler);
+      this.headingScrollHandler = null;
+    }
+
+    if (this.headingResizeHandler) {
+      window.removeEventListener('resize', this.headingResizeHandler);
+      this.headingResizeHandler = null;
+    }
+
+    if (this.headingActionButton) {
+      this.headingActionButton.remove();
+      this.headingActionButton = null;
+    }
+
+    if (this.headingActionMenu) {
+      this.headingActionMenu.remove();
+      this.headingActionMenu = null;
+    }
+
+    this.headingActionTarget = null;
+  }
+
+  private teardownHeadingMenuListeners(): void {
+    if (this.headingMenuDismissHandler) {
+      document.removeEventListener('mousedown', this.headingMenuDismissHandler);
+      this.headingMenuDismissHandler = null;
+    }
+
+    if (this.headingMenuKeyHandler) {
+      document.removeEventListener('keydown', this.headingMenuKeyHandler);
+      this.headingMenuKeyHandler = null;
+    }
+  }
+
+  private handleHeadingMouseMove(event: MouseEvent): void {
+    if (this.isHeadingMenuOpen) {
+      this.positionHeadingActionButton();
+      return;
+    }
+
+    const targetNode = event.target;
+    if (targetNode instanceof Node) {
+      if (this.headingActionButton && this.headingActionButton.contains(targetNode)) {
+        this.cancelHeadingActionHide();
+        return;
+      }
+
+      if (this.headingActionMenu && this.headingActionMenu.contains(targetNode)) {
+        this.cancelHeadingActionHide();
+        return;
+      }
+    }
+
+    const heading = this.getHeadingElementFromTarget(targetNode);
+    if (!heading) {
+      this.scheduleHeadingActionHide();
+      return;
+    }
+
+    this.cancelHeadingActionHide();
+    this.headingActionTarget = heading;
+    this.showHeadingActionButton();
+  }
+
+  private handleHeadingMouseLeave(): void {
+    if (this.isHeadingMenuOpen) {
+      return;
+    }
+
+    this.scheduleHeadingActionHide();
+  }
+
+  private getHeadingElementFromTarget(target: EventTarget | null): HTMLElement | null {
+    if (!(target instanceof HTMLElement)) {
+      return null;
+    }
+
+    const headingElement = target.closest('h1, h2, h3, h4, h5, h6');
+    if (!(headingElement instanceof HTMLElement)) {
+      return null;
+    }
+
+    if (!this.contentContainer.contains(headingElement)) {
+      return null;
+    }
+
+    return headingElement;
+  }
+
+  private showHeadingActionButton(): void {
+    if (!this.headingActionButton || !this.headingActionTarget) {
+      return;
+    }
+
+    this.cancelHeadingActionHide();
+    this.headingActionButton.classList.remove('hidden');
+    this.positionHeadingActionButton();
+  }
+
+  private hideHeadingActionButton(): void {
+    if (this.isHeadingMenuOpen) {
+      return;
+    }
+
+    if (this.headingActionButton) {
+      this.headingActionButton.classList.add('hidden');
+      this.headingActionButton.classList.remove('active');
+    }
+
+    this.headingActionTarget = null;
+  }
+
+  private scheduleHeadingActionHide(delayMs = 180): void {
+    if (this.isHeadingMenuOpen || !this.headingActionButton) {
+      return;
+    }
+
+    this.cancelHeadingActionHide();
+    this.headingActionHideTimer = window.setTimeout(() => {
+      this.headingActionHideTimer = null;
+      if (this.isHeadingMenuOpen) {
+        return;
+      }
+
+      this.hideHeadingActionButton();
+    }, delayMs);
+  }
+
+  private cancelHeadingActionHide(): void {
+    if (this.headingActionHideTimer !== null) {
+      window.clearTimeout(this.headingActionHideTimer);
+      this.headingActionHideTimer = null;
+    }
+  }
+
+  private positionHeadingActionButton(): void {
+    if (!this.headingActionButton || !this.headingActionTarget) {
+      return;
+    }
+
+    const headingRect = this.headingActionTarget.getBoundingClientRect();
+    const containerRect = this.contentContainer.getBoundingClientRect();
+    const isOutOfView =
+      headingRect.bottom < containerRect.top || headingRect.top > containerRect.bottom;
+    if (isOutOfView && !this.isHeadingMenuOpen) {
+      this.hideHeadingActionButton();
+      return;
+    }
+
+    const buttonHeight = this.headingActionButton.offsetHeight;
+    const buttonWidth = this.headingActionButton.offsetWidth;
+    const top =
+      headingRect.top -
+      containerRect.top +
+      this.contentContainer.scrollTop +
+      (headingRect.height - buttonHeight) / 2;
+    const left =
+      headingRect.left -
+      containerRect.left +
+      this.contentContainer.scrollLeft -
+      buttonWidth -
+      8;
+
+    this.headingActionButton.style.top = `${Math.max(2, top)}px`;
+    this.headingActionButton.style.left = `${Math.max(4, left)}px`;
+
+    if (this.isHeadingMenuOpen) {
+      this.positionHeadingActionMenu();
+    }
+  }
+
+  private positionHeadingActionMenu(): void {
+    if (!this.headingActionButton || !this.headingActionMenu || !this.isHeadingMenuOpen) {
+      return;
+    }
+
+    let left = this.headingActionButton.offsetLeft;
+    const top = this.headingActionButton.offsetTop + this.headingActionButton.offsetHeight + 4;
+
+    this.headingActionMenu.style.top = `${top}px`;
+    this.headingActionMenu.style.left = `${left}px`;
+
+    const menuRect = this.headingActionMenu.getBoundingClientRect();
+    const containerRect = this.contentContainer.getBoundingClientRect();
+    if (menuRect.right > containerRect.right - 8) {
+      left = Math.max(4, left - (menuRect.right - (containerRect.right - 8)));
+      this.headingActionMenu.style.left = `${left}px`;
+    }
+  }
+
+  private openHeadingActionMenu(): void {
+    if (!this.headingActionButton || !this.headingActionMenu || !this.headingActionTarget) {
+      return;
+    }
+
+    this.cancelHeadingActionHide();
+    this.isHeadingMenuOpen = true;
+    this.headingActionButton.classList.add('active');
+    this.headingActionButton.setAttribute('aria-expanded', 'true');
+    this.headingActionMenu.classList.add('open');
+    this.positionHeadingActionButton();
+
+    this.headingMenuDismissHandler = (event: MouseEvent) => {
+      const targetNode = event.target;
+      if (
+        targetNode instanceof Node &&
+        (this.headingActionButton?.contains(targetNode) || this.headingActionMenu?.contains(targetNode))
+      ) {
+        return;
+      }
+
+      this.closeHeadingActionMenu();
+    };
+    this.headingMenuKeyHandler = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') {
+        this.closeHeadingActionMenu();
+      }
+    };
+
+    document.addEventListener('mousedown', this.headingMenuDismissHandler);
+    document.addEventListener('keydown', this.headingMenuKeyHandler);
+  }
+
+  private closeHeadingActionMenu(): void {
+    this.isHeadingMenuOpen = false;
+    this.teardownHeadingMenuListeners();
+
+    if (this.headingActionMenu) {
+      this.headingActionMenu.classList.remove('open');
+    }
+
+    if (this.headingActionButton) {
+      this.headingActionButton.classList.remove('active');
+      this.headingActionButton.setAttribute('aria-expanded', 'false');
+    }
+
+    this.scheduleHeadingActionHide(120);
+  }
+
+  private getHeadingLineIndex(headingElement: HTMLElement): number | null {
+    if (!this.editor) {
+      return null;
+    }
+
+    try {
+      const headingPosition = this.editor.view.posAtDOM(headingElement, 0);
+      const contentBeforeHeading = this.editor.state.doc.textBetween(0, headingPosition, '\n', '\n');
+      if (contentBeforeHeading.length === 0) {
+        return 0;
+      }
+
+      return contentBeforeHeading.split('\n').length - 1;
+    } catch {
+      return null;
+    }
+  }
+
+  private formatHeadingToTitleCase(): void {
+    if (!this.editor || !this.headingActionTarget) {
+      return;
+    }
+
+    const lineIndex = this.getHeadingLineIndex(this.headingActionTarget);
+    if (lineIndex === null || lineIndex < 0) {
+      return;
+    }
+
+    const content = this.getEditorText();
+    const lines = content.split('\n');
+    const currentLine = lines[lineIndex];
+    if (typeof currentLine !== 'string') {
+      return;
+    }
+
+    const headingMatch = currentLine.match(/^(#{1,6}\s+)(.*)$/);
+    if (!headingMatch) {
+      return;
+    }
+
+    const trailingWhitespaceMatch = headingMatch[2].match(/\s+$/);
+    const trailingWhitespace = trailingWhitespaceMatch ? trailingWhitespaceMatch[0] : '';
+    const headingBody = trailingWhitespace
+      ? headingMatch[2].slice(0, -trailingWhitespace.length)
+      : headingMatch[2];
+    const titleCasedHeading = this.toTitleCase(headingBody);
+    if (!titleCasedHeading || titleCasedHeading === headingBody) {
+      this.closeHeadingActionMenu();
+      return;
+    }
+
+    lines[lineIndex] = `${headingMatch[1]}${titleCasedHeading}${trailingWhitespace}`;
+    const nextContent = lines.join('\n');
+
+    this.setEditorContentPreservingSelection(this.editor, this.markdownToTipTap(nextContent));
+    if (this.currentNote) {
+      this.currentNote = {
+        ...this.currentNote,
+        content: nextContent,
+      };
+    }
+
+    this.closeHeadingActionMenu();
+    this.hideHeadingActionButton();
+    this.scheduleAutosave();
+  }
+
+  private toTitleCase(value: string): string {
+    if (!value.trim()) {
+      return value;
+    }
+
+    const lowerCaseValue = value.toLocaleLowerCase();
+    const matches = Array.from(lowerCaseValue.matchAll(/[a-z0-9][a-z0-9'’]*/g));
+    if (matches.length === 0) {
+      return value;
+    }
+
+    let matchIndex = 0;
+    const lastMatchIndex = matches.length - 1;
+    return lowerCaseValue.replace(/[a-z0-9][a-z0-9'’]*/g, (word) => {
+      const isFirst = matchIndex === 0;
+      const isLast = matchIndex === lastMatchIndex;
+      matchIndex += 1;
+
+      if (!isFirst && !isLast && TITLE_CASE_SMALL_WORDS.has(word)) {
+        return word;
+      }
+
+      return `${word.charAt(0).toLocaleUpperCase()}${word.slice(1)}`;
+    });
+  }
+
   private async saveEdits(options: SaveEditsOptions = {}): Promise<void> {
     if (!this.currentNote || !this.editor || !this.onNoteSaveCallback) {
       return;
@@ -324,6 +803,10 @@ export class NoteView {
       return;
     }
 
+    if (!this.isHeadingMenuOpen) {
+      this.hideHeadingActionButton();
+    }
+
     this.scheduleMarkdownStyling(editor);
 
     const content = editor.state.doc.textBetween(0, editor.state.doc.content.size, '\n', '\n');
@@ -394,6 +877,22 @@ export class NoteView {
     ).length;
     const headOffset = editor.state.doc.textBetween(0, editor.state.selection.head, '\n', '\n').length;
 
+    this.setEditorContentPreservingSelection(editor, normalizedHtml, anchorOffset, headOffset);
+  }
+
+  private setEditorContentPreservingSelection(
+    editor: Editor,
+    normalizedHtml: string,
+    anchorOffsetOverride?: number,
+    headOffsetOverride?: number,
+  ): void {
+    const anchorOffset =
+      anchorOffsetOverride ??
+      editor.state.doc.textBetween(0, editor.state.selection.anchor, '\n', '\n').length;
+    const headOffset =
+      headOffsetOverride ??
+      editor.state.doc.textBetween(0, editor.state.selection.head, '\n', '\n').length;
+
     this.isApplyingContent = true;
     try {
       editor.commands.setContent(normalizedHtml, false, { preserveWhitespace: 'full' });
@@ -405,7 +904,7 @@ export class NoteView {
       const to = Math.max(anchorPosition, headPosition);
       editor.commands.setTextSelection({ from, to });
     } catch (error) {
-      console.debug('Could not apply live markdown styling:', error);
+      console.debug('Could not update editor content:', error);
     } finally {
       this.isApplyingContent = false;
     }
@@ -487,6 +986,8 @@ export class NoteView {
       this.pendingAutosave = false;
       this.pendingMetadataUpdate = null;
       this.hideSelectionTooltip();
+      this.closeHeadingActionMenu();
+      this.hideHeadingActionButton();
     }
 
     this.currentNote = note;
@@ -958,6 +1459,8 @@ export class NoteView {
     }
 
     const content = this.markdownToTipTap(note.content);
+    this.closeHeadingActionMenu();
+    this.hideHeadingActionButton();
     this.isApplyingContent = true;
     try {
       this.editor.commands.setContent(content, false, { preserveWhitespace: 'full' });
@@ -1078,6 +1581,7 @@ export class NoteView {
       this.markdownStylingTimer = null;
     }
     this.teardownActionsMenuListeners();
+    this.teardownHeadingActionControls();
     this.currentNote = null;
     this.isSaving = false;
     this.isSavingMetadata = false;
@@ -1125,6 +1629,7 @@ export class NoteView {
       this.markdownStylingTimer = null;
     }
     this.teardownActionsMenuListeners();
+    this.teardownHeadingActionControls();
 
     if (this.editor) {
       this.editor.destroy();

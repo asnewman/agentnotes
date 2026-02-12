@@ -291,6 +291,7 @@
   flex: 1;
   overflow-y: auto;
   padding: 24px 24px 46px;
+  position: relative;
 }
 
 .note-content > * {
@@ -317,6 +318,75 @@
 
 .note-last-saved-overlay.hidden {
   display: none;
+}
+
+.heading-action-btn {
+  position: absolute;
+  width: 20px;
+  height: 20px;
+  border: 1px solid transparent;
+  border-radius: 4px;
+  background: transparent;
+  color: var(--text-muted);
+  line-height: 1;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  opacity: 0.64;
+  z-index: 35;
+  transition: opacity 0.15s ease, background-color 0.15s ease, border-color 0.15s ease;
+}
+
+.heading-action-btn-icon {
+  width: 14px;
+  height: 14px;
+}
+
+.heading-action-btn.hidden {
+  display: none;
+}
+
+.heading-action-btn:hover,
+.heading-action-btn.active {
+  opacity: 1;
+  background: rgba(255, 255, 255, 0.06);
+  border-color: rgba(255, 255, 255, 0.1);
+  color: var(--text-secondary);
+}
+
+.heading-action-menu {
+  display: none;
+  position: absolute;
+  width: max-content;
+  min-width: 0;
+  padding: 6px;
+  border-radius: 8px;
+  border: 1px solid var(--border-color);
+  background: var(--bg-secondary);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.32);
+  z-index: 36;
+}
+
+.heading-action-menu.open {
+  display: block;
+}
+
+.heading-action-menu-item {
+  width: auto;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--text-secondary);
+  font-size: 12px;
+  text-align: left;
+  white-space: nowrap;
+  padding: 8px 10px;
+  cursor: pointer;
+}
+
+.heading-action-menu-item:hover {
+  background: var(--bg-hover);
 }
 
 /* TipTap Editor Styles */
