@@ -105,10 +105,9 @@ export async function updateNote(noteId: string, content: string): Promise<Comme
 
 export async function updateNoteMetadata(
   noteId: string,
-  title: string,
   tags: string[],
 ): Promise<CommentMutationResult> {
-  const result = await window.api.updateNoteMetadata(noteId, title, tags);
+  const result = await window.api.updateNoteMetadata(noteId, tags);
 
   if (result.success) {
     clearCache();
@@ -147,24 +146,4 @@ export async function deleteComment(
   }
 
   return result;
-}
-
-export function formatDate(isoDate: string): string {
-  const date = new Date(isoDate);
-  return date.toLocaleDateString('en-US', {
-    year: 'numeric',
-    month: 'short',
-    day: 'numeric',
-  });
-}
-
-export function formatDateTime(isoDate: string): string {
-  const date = new Date(isoDate);
-  return date.toLocaleDateString('en-US', {
-    year: 'numeric',
-    month: 'short',
-    day: 'numeric',
-    hour: '2-digit',
-    minute: '2-digit',
-  });
 }

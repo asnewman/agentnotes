@@ -24,10 +24,9 @@ const api: PreloadApi = {
     ipcRenderer.invoke('directory:delete', { path }) as Promise<DirectoryMutationResult>,
   updateNote: (noteId: string, content: string) =>
     ipcRenderer.invoke('notes:update', { noteId, content }) as Promise<CommentMutationResult>,
-  updateNoteMetadata: (noteId: string, title: string, tags: string[]) =>
+  updateNoteMetadata: (noteId: string, tags: string[]) =>
     ipcRenderer.invoke('notes:updateMetadata', {
       noteId,
-      title,
       tags,
     }) as Promise<CommentMutationResult>,
   addComment: (

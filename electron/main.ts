@@ -36,7 +36,7 @@ interface MarkdownFileRecord {
   relativePath: string;
 }
 
-interface FrontmatterData extends Record<string, unknown> {
+interface LegacyFrontmatterData extends Record<string, unknown> {
   id?: unknown;
   title?: unknown;
   tags?: unknown;
@@ -46,6 +46,29 @@ interface FrontmatterData extends Record<string, unknown> {
   comment_rev?: unknown;
   comments?: unknown;
 }
+
+interface NoteSidecarData extends Record<string, unknown> {
+  tags?: unknown;
+  comment_rev?: unknown;
+  comments?: unknown;
+}
+
+interface ParsedMarkdownNote {
+  content: string;
+  legacyData: LegacyFrontmatterData;
+  hasLegacyFrontmatter: boolean;
+}
+
+const LEGACY_FRONTMATTER_FIELDS = new Set([
+  'id',
+  'title',
+  'tags',
+  'created',
+  'updated',
+  'source',
+  'comment_rev',
+  'comments',
+]);
 
 const store = new Store<StoreSchema>({
   defaults: {
@@ -254,34 +277,7 @@ function cleanupEmptyParentDirectories(startDir: string, stopDir: string): void 
   }
 }
 
-function getFileTimestampIso(filePath: string): string {
-  try {
-    const stats = fs.statSync(filePath);
-    const timestamps = [stats.birthtimeMs, stats.ctimeMs, stats.mtimeMs].filter(
-      (value) => Number.isFinite(value) && value > 0,
-    );
-
-    if (timestamps.length > 0) {
-      return new Date(timestamps[0]).toISOString();
-    }
-  } catch {
-    // Use epoch fallback if metadata is unavailable.
-  }
-
-  return new Date(0).toISOString();
-}
-
-function createdTimestamp(note: Note): number {
-  const timestamp = Date.parse(note.created);
-  return Number.isNaN(timestamp) ? 0 : timestamp;
-}
-
-function compareNotesByCreated(a: Note, b: Note): number {
-  const createdDiff = createdTimestamp(b) - createdTimestamp(a);
-  if (createdDiff !== 0) {
-    return createdDiff;
-  }
-
+function compareNotes(a: Note, b: Note): number {
   const pathDiff = a.relativePath.localeCompare(b.relativePath);
   if (pathDiff !== 0) {
     return pathDiff;
@@ -512,23 +508,119 @@ function getRelativePathFromNotesDir(notesDir: string, fullPath: string): string
   return formatRelativePath(path.relative(notesDir, fullPath));
 }
 
-function findNoteRecordById(notesDir: string, noteId: string): MarkdownFileRecord | null {
-  const files = getAllMarkdownFiles(notesDir);
+function getNoteSidecarPath(notePath: string): string {
+  const extensionlessPath = path.extname(notePath).toLowerCase() === '.md'
+    ? notePath.slice(0, -3)
+    : notePath;
+  return `${extensionlessPath}.json`;
+}
 
-  for (const file of files) {
-    try {
-      const fileContent = fs.readFileSync(file.fullPath, 'utf-8');
-      const parsedMatter = matter(fileContent);
-      const data = parsedMatter.data as FrontmatterData;
-      if (toStringValue(data.id) === noteId) {
-        return file;
-      }
-    } catch (error) {
-      console.error(`Error reading note ${file.fullPath}:`, error);
+function hasLegacyFrontmatter(data: unknown): data is LegacyFrontmatterData {
+  if (!isRecord(data)) {
+    return false;
+  }
+
+  for (const key of LEGACY_FRONTMATTER_FIELDS) {
+    if (key in data) {
+      return true;
     }
   }
 
-  return null;
+  return false;
+}
+
+function parseMarkdownContent(filePath: string): ParsedMarkdownNote {
+  const rawContent = fs.readFileSync(filePath, 'utf-8');
+  const normalizedRawContent = rawContent.replace(/\r\n/g, '\n');
+  const parsed = matter(normalizedRawContent);
+
+  if (normalizedRawContent.startsWith('---\n') && hasLegacyFrontmatter(parsed.data)) {
+    return {
+      content: normalizeContent(parsed.content),
+      legacyData: parsed.data,
+      hasLegacyFrontmatter: true,
+    };
+  }
+
+  return {
+    content: normalizeContent(normalizedRawContent),
+    legacyData: {},
+    hasLegacyFrontmatter: false,
+  };
+}
+
+function readSidecarData(filePath: string): NoteSidecarData {
+  const sidecarPath = getNoteSidecarPath(filePath);
+  if (!fs.existsSync(sidecarPath)) {
+    return {};
+  }
+
+  try {
+    const rawData = fs.readFileSync(sidecarPath, 'utf-8');
+    const parsedData = JSON.parse(rawData) as unknown;
+    return isRecord(parsedData) ? parsedData : {};
+  } catch (error) {
+    console.error(`Error reading note metadata sidecar ${sidecarPath}:`, error);
+    return {};
+  }
+}
+
+function writeSidecarData(
+  filePath: string,
+  tags: string[],
+  comments: NoteComment[],
+  commentRev: number,
+): void {
+  const sidecarPath = getNoteSidecarPath(filePath);
+  const normalizedTags = normalizeTags(tags);
+  const normalizedCommentRev = Math.max(0, Math.floor(commentRev));
+  const payload: Record<string, unknown> = {
+    tags: normalizedTags,
+    comments: comments.map((comment) => toCommentRecord(comment)),
+  };
+
+  if (normalizedCommentRev > 0) {
+    payload.comment_rev = normalizedCommentRev;
+  }
+
+  fs.writeFileSync(sidecarPath, `${JSON.stringify(payload, null, 2)}\n`, 'utf-8');
+}
+
+function extractNoteTitle(content: string, filePath: string): string {
+  const firstLineBreak = content.indexOf('\n');
+  const firstLine = firstLineBreak >= 0 ? content.slice(0, firstLineBreak) : content;
+  const headingMatch = firstLine.match(/^#\s+(.+?)\s*$/);
+  if (headingMatch && headingMatch[1]) {
+    return headingMatch[1].trim();
+  }
+
+  return path.basename(filePath, '.md');
+}
+
+function findNoteRecordById(notesDir: string, noteId: string): MarkdownFileRecord | null {
+  const normalizedId = noteId.trim();
+  if (path.extname(normalizedId).toLowerCase() !== '.md') {
+    return null;
+  }
+
+  const fullPath = resolveNotesPath(notesDir, normalizedId);
+  if (!fullPath || !fs.existsSync(fullPath)) {
+    return null;
+  }
+
+  try {
+    const stats = fs.statSync(fullPath);
+    if (!stats.isFile()) {
+      return null;
+    }
+  } catch {
+    return null;
+  }
+
+  return {
+    fullPath,
+    relativePath: getRelativePathFromNotesDir(notesDir, fullPath),
+  };
 }
 
 function generateUniqueFilePath(targetDir: string, baseName: string): string {
@@ -538,7 +630,7 @@ function generateUniqueFilePath(targetDir: string, baseName: string): string {
   let candidatePath = path.join(targetDir, candidateName);
   let suffix = 2;
 
-  while (fs.existsSync(candidatePath)) {
+  while (fs.existsSync(candidatePath) || fs.existsSync(getNoteSidecarPath(candidatePath))) {
     candidateName = `${normalizedBaseName}-${suffix}${extension}`;
     candidatePath = path.join(targetDir, candidateName);
     suffix += 1;
@@ -549,34 +641,46 @@ function generateUniqueFilePath(targetDir: string, baseName: string): string {
 
 function parseNoteFile(filePath: string, relativePath = ''): Note | null {
   try {
-    const fileContent = fs.readFileSync(filePath, 'utf-8');
-    const parsedMatter = matter(fileContent);
-    const data = parsedMatter.data as FrontmatterData;
-    const fallbackIso = getFileTimestampIso(filePath);
-    const content = normalizeContent(parsedMatter.content);
+    const { content, legacyData, hasLegacyFrontmatter } = parseMarkdownContent(filePath);
+    const sidecarPath = getNoteSidecarPath(filePath);
+    const sidecarData = readSidecarData(filePath);
     const normalizedRelativePath = formatRelativePath(relativePath || path.basename(filePath));
     const directory = normalizedRelativePath ? formatRelativePath(path.dirname(normalizedRelativePath)) : '';
-
-    const declaredRev = Math.max(0, toNumberValue(data.comment_rev, 0));
+    const tags = normalizeTags(toStringArray(sidecarData.tags ?? legacyData.tags));
+    const declaredRev = Math.max(0, toNumberValue(sidecarData.comment_rev ?? legacyData.comment_rev, 0));
     const defaultRev = declaredRev > 0 ? declaredRev : 0;
-    const comments = parseComments(data.comments, content, defaultRev);
+    const comments = parseComments(sidecarData.comments ?? legacyData.comments, content, defaultRev);
     const commentRev = comments.length > 0 ? Math.max(1, declaredRev) : declaredRev;
+    const normalizedComments = comments.map((comment) => ({
+      ...comment,
+      anchor: {
+        ...comment.anchor,
+        rev: comment.anchor.rev > 0 ? comment.anchor.rev : commentRev,
+      },
+    }));
+
+    if (!fs.existsSync(sidecarPath) || hasLegacyFrontmatter) {
+      try {
+        writeSidecarData(filePath, tags, normalizedComments, commentRev);
+      } catch (error) {
+        console.error(`Error writing note metadata sidecar ${sidecarPath}:`, error);
+      }
+    }
+
+    if (hasLegacyFrontmatter) {
+      try {
+        fs.writeFileSync(filePath, content, 'utf-8');
+      } catch (error) {
+        console.error(`Error rewriting legacy note ${filePath}:`, error);
+      }
+    }
 
     return {
-      id: toStringValue(data.id),
-      title: toStringValue(data.title, 'Untitled'),
-      tags: toStringArray(data.tags),
-      created: toIsoDate(data.created, fallbackIso),
-      updated: toIsoDate(data.updated, fallbackIso),
-      source: toStringValue(data.source),
+      id: normalizedRelativePath,
+      title: extractNoteTitle(content, filePath),
+      tags,
       commentRev,
-      comments: comments.map((comment) => ({
-        ...comment,
-        anchor: {
-          ...comment.anchor,
-          rev: comment.anchor.rev > 0 ? comment.anchor.rev : commentRev,
-        },
-      })),
+      comments: normalizedComments,
       content,
       filename: path.basename(filePath),
       relativePath: normalizedRelativePath,
@@ -647,11 +751,7 @@ function isUpdateNoteMetadataPayload(payload: unknown): payload is UpdateNoteMet
     return false;
   }
 
-  return (
-    typeof payload.noteId === 'string' &&
-    typeof payload.title === 'string' &&
-    payload.tags.every((tag) => typeof tag === 'string')
-  );
+  return typeof payload.noteId === 'string' && payload.tags.every((tag) => typeof tag === 'string');
 }
 
 function isCreateNotePayload(payload: unknown): payload is CreateNotePayload {
@@ -714,7 +814,7 @@ ipcMain.handle('notes:list', async (): Promise<NotesListResult> => {
     const notes = files
       .map(({ fullPath, relativePath }) => parseNoteFile(fullPath, relativePath))
       .filter((note): note is Note => note !== null)
-      .sort(compareNotesByCreated);
+      .sort(compareNotes);
 
     return { notes, directories, noDirectory: false };
   } catch (error) {
@@ -731,16 +831,12 @@ ipcMain.handle('notes:get', async (_event, noteId: string): Promise<Note | null>
   }
 
   try {
-    const files = getAllMarkdownFiles(notesDir);
-
-    for (const { fullPath, relativePath } of files) {
-      const note = parseNoteFile(fullPath, relativePath);
-      if (note && note.id === noteId) {
-        return note;
-      }
+    const record = findNoteRecordById(notesDir, noteId);
+    if (!record) {
+      return null;
     }
 
-    return null;
+    return parseNoteFile(record.fullPath, record.relativePath);
   } catch (error) {
     console.error('Error getting note:', error);
     return null;
@@ -781,17 +877,9 @@ ipcMain.handle(
       const datePrefix = nowIso.slice(0, 10);
       const titleSlug = slugify(title) || 'note';
       const filePath = generateUniqueFilePath(targetDirectory, `${datePrefix}-${titleSlug}`);
-      const noteData: FrontmatterData = {
-        id: ulid(),
-        title,
-        tags: [],
-        created: nowIso,
-        updated: nowIso,
-        source: 'user',
-      };
       const noteContent = `# ${title}\n\n`;
-      const noteFile = matter.stringify(noteContent, noteData);
-      fs.writeFileSync(filePath, noteFile, 'utf-8');
+      fs.writeFileSync(filePath, noteContent, 'utf-8');
+      writeSidecarData(filePath, [], [], 0);
 
       const relativePath = getRelativePathFromNotesDir(notesDir, filePath);
       return {
@@ -827,6 +915,10 @@ ipcMain.handle(
       }
 
       fs.unlinkSync(record.fullPath);
+      const sidecarPath = getNoteSidecarPath(record.fullPath);
+      if (fs.existsSync(sidecarPath)) {
+        fs.unlinkSync(sidecarPath);
+      }
 
       const parentDir = path.dirname(record.fullPath);
       if (path.resolve(parentDir) !== path.resolve(notesDir)) {
@@ -878,12 +970,20 @@ ipcMain.handle(
       const currentDirectory = path.dirname(currentPath);
 
       let destinationPath = path.join(targetDirectory, path.basename(record.fullPath));
-      if (path.resolve(destinationPath) !== currentPath && fs.existsSync(destinationPath)) {
+      if (
+        path.resolve(destinationPath) !== currentPath &&
+        (fs.existsSync(destinationPath) || fs.existsSync(getNoteSidecarPath(destinationPath)))
+      ) {
         destinationPath = generateUniqueFilePath(targetDirectory, path.basename(record.fullPath, '.md'));
       }
 
       if (path.resolve(destinationPath) !== currentPath) {
+        const sourceSidecarPath = getNoteSidecarPath(record.fullPath);
+        const destinationSidecarPath = getNoteSidecarPath(destinationPath);
         fs.renameSync(record.fullPath, destinationPath);
+        if (fs.existsSync(sourceSidecarPath)) {
+          fs.renameSync(sourceSidecarPath, destinationSidecarPath);
+        }
         if (path.resolve(currentDirectory) !== path.resolve(notesDir)) {
           cleanupEmptyParentDirectories(currentDirectory, notesDir);
         }
@@ -918,55 +1018,38 @@ ipcMain.handle(
     }
 
     try {
-      const files = getAllMarkdownFiles(notesDir);
-
-      for (const { fullPath, relativePath } of files) {
-        const fileContent = fs.readFileSync(fullPath, 'utf-8');
-        const parsedMatter = matter(fileContent);
-        const data = parsedMatter.data as FrontmatterData;
-
-        if (toStringValue(data.id) !== payload.noteId) {
-          continue;
-        }
-
-        const currentNote = parseNoteFile(fullPath, relativePath);
-        if (!currentNote) {
-          return { success: false, error: 'Failed to parse current note' };
-        }
-
-        const updatedContent = normalizeContent(payload.content);
-        let nextComments = currentNote.comments;
-        let nextRev = currentNote.commentRev;
-
-        if (updatedContent !== currentNote.content) {
-          const remap = remapCommentsForEdit(
-            currentNote.comments,
-            currentNote.content,
-            updatedContent,
-            currentNote.commentRev,
-          );
-          nextComments = remap.comments;
-          nextRev = remap.nextRev;
-        }
-
-        data.comments = nextComments.map((comment) => toCommentRecord(comment));
-        if (nextRev > 0) {
-          data.comment_rev = nextRev;
-        } else {
-          delete data.comment_rev;
-        }
-        data.updated = new Date().toISOString();
-
-        const updatedFile = matter.stringify(payload.content, data);
-        fs.writeFileSync(fullPath, updatedFile, 'utf-8');
-
-        return {
-          success: true,
-          note: parseNoteFile(fullPath, relativePath) ?? undefined,
-        };
+      const record = findNoteRecordById(notesDir, payload.noteId);
+      if (!record) {
+        return { success: false, error: 'Note not found' };
       }
 
-      return { success: false, error: 'Note not found' };
+      const currentNote = parseNoteFile(record.fullPath, record.relativePath);
+      if (!currentNote) {
+        return { success: false, error: 'Failed to parse current note' };
+      }
+
+      const updatedContent = normalizeContent(payload.content);
+      let nextComments = currentNote.comments;
+      let nextRev = currentNote.commentRev;
+
+      if (updatedContent !== currentNote.content) {
+        const remap = remapCommentsForEdit(
+          currentNote.comments,
+          currentNote.content,
+          updatedContent,
+          currentNote.commentRev,
+        );
+        nextComments = remap.comments;
+        nextRev = remap.nextRev;
+      }
+
+      fs.writeFileSync(record.fullPath, updatedContent, 'utf-8');
+      writeSidecarData(record.fullPath, currentNote.tags, nextComments, nextRev);
+
+      return {
+        success: true,
+        note: parseNoteFile(record.fullPath, record.relativePath) ?? undefined,
+      };
     } catch (error) {
       console.error('Error updating note:', error);
       return {
@@ -990,39 +1073,30 @@ ipcMain.handle(
       return { success: false, error: 'Notes directory not found' };
     }
 
-    const normalizedTitle = payload.title.trim();
-    if (!normalizedTitle) {
-      return { success: false, error: 'Title cannot be empty' };
-    }
-
     const normalizedTags = normalizeTags(payload.tags);
 
     try {
-      const files = getAllMarkdownFiles(notesDir);
-
-      for (const { fullPath, relativePath } of files) {
-        const fileContent = fs.readFileSync(fullPath, 'utf-8');
-        const parsedMatter = matter(fileContent);
-        const data = parsedMatter.data as FrontmatterData;
-
-        if (toStringValue(data.id) !== payload.noteId) {
-          continue;
-        }
-
-        data.title = normalizedTitle;
-        data.tags = normalizedTags;
-        data.updated = new Date().toISOString();
-
-        const updatedFile = matter.stringify(parsedMatter.content, data);
-        fs.writeFileSync(fullPath, updatedFile, 'utf-8');
-
-        return {
-          success: true,
-          note: parseNoteFile(fullPath, relativePath) ?? undefined,
-        };
+      const record = findNoteRecordById(notesDir, payload.noteId);
+      if (!record) {
+        return { success: false, error: 'Note not found' };
       }
 
-      return { success: false, error: 'Note not found' };
+      const currentNote = parseNoteFile(record.fullPath, record.relativePath);
+      if (!currentNote) {
+        return { success: false, error: 'Failed to parse current note' };
+      }
+
+      writeSidecarData(
+        record.fullPath,
+        normalizedTags,
+        currentNote.comments,
+        currentNote.commentRev,
+      );
+
+      return {
+        success: true,
+        note: parseNoteFile(record.fullPath, record.relativePath) ?? undefined,
+      };
     } catch (error) {
       console.error('Error updating note metadata:', error);
       return {
@@ -1173,73 +1247,59 @@ ipcMain.handle(
     }
 
     try {
-      const files = getAllMarkdownFiles(notesDir);
+      const record = findNoteRecordById(notesDir, payload.noteId);
+      if (!record) {
+        return { success: false, error: 'Note not found' };
+      }
 
-      for (const { fullPath, relativePath } of files) {
-        const fileContent = fs.readFileSync(fullPath, 'utf-8');
-        const parsedMatter = matter(fileContent);
-        const data = parsedMatter.data as FrontmatterData;
+      const currentNote = parseNoteFile(record.fullPath, record.relativePath);
+      if (!currentNote) {
+        return { success: false, error: 'Failed to parse current note' };
+      }
 
-        if (toStringValue(data.id) !== payload.noteId) {
-          continue;
-        }
-
-        const currentNote = parseNoteFile(fullPath, relativePath);
-        if (!currentNote) {
-          return { success: false, error: 'Failed to parse current note' };
-        }
-
-        if (payload.anchor.rev !== currentNote.commentRev) {
-          return {
-            success: false,
-            error: `Anchor revision mismatch. Expected rev ${currentNote.commentRev}, received rev ${payload.anchor.rev}`,
-          };
-        }
-
-        const targetRev = currentNote.commentRev > 0 ? currentNote.commentRev : 1;
-        let anchor: CommentAnchor;
-
-        try {
-          anchor = buildAnchorFromRange(
-            currentNote.content,
-            payload.anchor.from,
-            payload.anchor.to,
-            targetRev,
-          );
-        } catch (error) {
-          return {
-            success: false,
-            error: error instanceof Error ? error.message : 'Invalid comment range',
-          };
-        }
-
-        anchor.startAffinity = normalizeAffinity(payload.anchor.startAffinity, 'after');
-        anchor.endAffinity = normalizeAffinity(payload.anchor.endAffinity, 'before');
-
-        const newComment: NoteComment = {
-          id: ulid(),
-          author: payload.author,
-          created: new Date().toISOString(),
-          content: payload.content,
-          status: 'attached',
-          anchor,
-        };
-
-        const comments = [...currentNote.comments, newComment];
-        data.comments = comments.map((comment) => toCommentRecord(comment));
-        data.comment_rev = targetRev;
-        data.updated = new Date().toISOString();
-
-        const updatedFile = matter.stringify(parsedMatter.content, data);
-        fs.writeFileSync(fullPath, updatedFile, 'utf-8');
-
+      if (payload.anchor.rev !== currentNote.commentRev) {
         return {
-          success: true,
-          note: parseNoteFile(fullPath, relativePath) ?? undefined,
+          success: false,
+          error: `Anchor revision mismatch. Expected rev ${currentNote.commentRev}, received rev ${payload.anchor.rev}`,
         };
       }
 
-      return { success: false, error: 'Note not found' };
+      const targetRev = currentNote.commentRev > 0 ? currentNote.commentRev : 1;
+      let anchor: CommentAnchor;
+
+      try {
+        anchor = buildAnchorFromRange(
+          currentNote.content,
+          payload.anchor.from,
+          payload.anchor.to,
+          targetRev,
+        );
+      } catch (error) {
+        return {
+          success: false,
+          error: error instanceof Error ? error.message : 'Invalid comment range',
+        };
+      }
+
+      anchor.startAffinity = normalizeAffinity(payload.anchor.startAffinity, 'after');
+      anchor.endAffinity = normalizeAffinity(payload.anchor.endAffinity, 'before');
+
+      const newComment: NoteComment = {
+        id: ulid(),
+        author: payload.author,
+        created: new Date().toISOString(),
+        content: payload.content,
+        status: 'attached',
+        anchor,
+      };
+
+      const comments = [...currentNote.comments, newComment];
+      writeSidecarData(record.fullPath, currentNote.tags, comments, targetRev);
+
+      return {
+        success: true,
+        note: parseNoteFile(record.fullPath, record.relativePath) ?? undefined,
+      };
     } catch (error) {
       console.error('Error adding comment:', error);
       return {
@@ -1268,46 +1328,28 @@ ipcMain.handle(
     }
 
     try {
-      const files = getAllMarkdownFiles(notesDir);
-
-      for (const { fullPath, relativePath } of files) {
-        const fileContent = fs.readFileSync(fullPath, 'utf-8');
-        const parsedMatter = matter(fileContent);
-        const data = parsedMatter.data as FrontmatterData;
-
-        if (toStringValue(data.id) !== payload.noteId) {
-          continue;
-        }
-
-        const currentNote = parseNoteFile(fullPath, relativePath);
-        if (!currentNote) {
-          return { success: false, error: 'Failed to parse current note' };
-        }
-
-        const nextComments = currentNote.comments.filter((comment) => comment.id !== payload.commentId);
-
-        if (nextComments.length === currentNote.comments.length) {
-          return { success: false, error: 'Comment not found' };
-        }
-
-        data.comments = nextComments.map((comment) => toCommentRecord(comment));
-        if (currentNote.commentRev > 0) {
-          data.comment_rev = currentNote.commentRev;
-        } else {
-          delete data.comment_rev;
-        }
-        data.updated = new Date().toISOString();
-
-        const updatedFile = matter.stringify(parsedMatter.content, data);
-        fs.writeFileSync(fullPath, updatedFile, 'utf-8');
-
-        return {
-          success: true,
-          note: parseNoteFile(fullPath, relativePath) ?? undefined,
-        };
+      const record = findNoteRecordById(notesDir, payload.noteId);
+      if (!record) {
+        return { success: false, error: 'Note not found' };
       }
 
-      return { success: false, error: 'Note not found' };
+      const currentNote = parseNoteFile(record.fullPath, record.relativePath);
+      if (!currentNote) {
+        return { success: false, error: 'Failed to parse current note' };
+      }
+
+      const nextComments = currentNote.comments.filter((comment) => comment.id !== payload.commentId);
+
+      if (nextComments.length === currentNote.comments.length) {
+        return { success: false, error: 'Comment not found' };
+      }
+
+      writeSidecarData(record.fullPath, currentNote.tags, nextComments, currentNote.commentRev);
+
+      return {
+        success: true,
+        note: parseNoteFile(record.fullPath, record.relativePath) ?? undefined,
+      };
     } catch (error) {
       console.error('Error deleting comment:', error);
       return {

@@ -367,9 +367,9 @@ async function onNoteSave(noteId: string, content: string): Promise<Note | null>
   }
 }
 
-async function onNoteMetadataSave(noteId: string, title: string, tags: string[]): Promise<Note | null> {
+async function onNoteMetadataSave(noteId: string, tags: string[]): Promise<Note | null> {
   try {
-    const result = await updateNoteMetadata(noteId, title, tags);
+    const result = await updateNoteMetadata(noteId, tags);
 
     if (!result.success || !result.note) {
       console.error('Failed to update note metadata:', result.error);
@@ -631,7 +631,7 @@ async function init(): Promise<void> {
   });
 
   const noteListContainer = requireElementById<HTMLElement>('noteList');
-  const noteHeaderContainer = requireElementById<HTMLElement>('noteHeader');
+  const noteSidebarMetaContainer = requireElementById<HTMLElement>('noteSidebarMeta');
   const noteContentContainer = requireElementById<HTMLElement>('noteContent');
   const commentsListContainer = requireElementById<HTMLElement>('commentsList');
 
@@ -642,7 +642,7 @@ async function init(): Promise<void> {
     onCreateDirectory,
     onDeleteDirectory,
   });
-  noteView = new NoteView(noteHeaderContainer, noteContentContainer);
+  noteView = new NoteView(noteSidebarMetaContainer, noteContentContainer);
   commentsPanel = new CommentsPanel(commentsListContainer);
 
   noteView.setOnCommentCreate(onCommentCreate);

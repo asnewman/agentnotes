@@ -23,17 +23,7 @@ interface NoteListCallbacks {
   onDeleteDirectory: (targetDirectory: string) => void | Promise<void>;
 }
 
-function parseDate(value: string): number {
-  const timestamp = Date.parse(value);
-  return Number.isNaN(timestamp) ? 0 : timestamp;
-}
-
-function compareNotesByCreated(a: Note, b: Note): number {
-  const createdDiff = parseDate(b.created) - parseDate(a.created);
-  if (createdDiff !== 0) {
-    return createdDiff;
-  }
-
+function compareNotes(a: Note, b: Note): number {
   const pathDiff = a.relativePath.localeCompare(b.relativePath);
   if (pathDiff !== 0) {
     return pathDiff;
@@ -104,7 +94,7 @@ function buildNoteTree(notes: Note[], directories: string[]): TreeNode[] {
     ensureDirectory(directory);
   }
 
-  const sortedNotes = [...notes].sort(compareNotesByCreated);
+  const sortedNotes = [...notes].sort(compareNotes);
   for (const note of sortedNotes) {
     if (!note.directory) {
       tree.push({ type: 'note', note });
@@ -135,7 +125,7 @@ function buildNoteTree(notes: Note[], directories: string[]): TreeNode[] {
       }
 
       if (a.type === 'note' && b.type === 'note') {
-        return compareNotesByCreated(a.note, b.note);
+        return compareNotes(a.note, b.note);
       }
 
       return 0;

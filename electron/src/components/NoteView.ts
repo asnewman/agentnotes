@@ -2,7 +2,6 @@ import { Editor } from '@tiptap/core';
 import Highlight from '@tiptap/extension-highlight';
 import StarterKit from '@tiptap/starter-kit';
 import { buildAnchorFromRange, getAllHighlightRanges } from '../lib/highlighter';
-import { formatDate, formatDateTime } from '../lib/noteStore';
 import type { CommentAnchor, Note } from '../types';
 import { createTagChip } from './TagChip';
 
@@ -37,13 +36,12 @@ interface CurrentSelection {
 }
 
 interface MetadataUpdate {
-  title: string;
   tags: string[];
 }
 
 type CommentCreateHandler = (anchor: CommentAnchor, selectedText: string) => void;
 type NoteSaveHandler = (noteId: string, content: string) => Promise<Note | null>;
-type NoteMetadataSaveHandler = (noteId: string, title: string, tags: string[]) => Promise<Note | null>;
+type NoteMetadataSaveHandler = (noteId: string, tags: string[]) => Promise<Note | null>;
 type NoteActionHandler = (note: Note) => void | Promise<void>;
 
 interface SaveEditsOptions {
@@ -762,7 +760,7 @@ export class NoteView {
           const latestContent = this.getEditorText();
           this.lastSavedContent = contentToSave;
           this.currentNote = { ...updatedNote, content: latestContent };
-          this.renderMeta(this.currentNote);
+          this.renderHeader(this.currentNote);
           this.renderLastSavedStatus();
 
           if (latestContent !== contentToSave) {
@@ -965,7 +963,7 @@ export class NoteView {
       return;
     }
 
-    this.lastSavedOverlay.textContent = `Last saved ${formatDateTime(this.currentNote.updated)}`;
+    this.lastSavedOverlay.textContent = 'Saved';
   }
 
   render(note: Note | null): void {
@@ -998,77 +996,8 @@ export class NoteView {
   }
 
   private renderHeader(note: Note): void {
-    this.renderTitle(note);
-    this.renderMeta(note);
     this.renderTags(note);
     this.renderActions();
-  }
-
-  private renderTitle(note: Note): void {
-    const titleElement = this.headerContainer.querySelector<HTMLElement>('.note-title');
-    if (!titleElement) {
-      return;
-    }
-
-    let titleInput = titleElement.querySelector<HTMLInputElement>('.note-title-input');
-    if (!titleInput) {
-      titleElement.innerHTML = '';
-
-      const newTitleInput = document.createElement('input');
-      newTitleInput.className = 'note-title-input';
-      newTitleInput.type = 'text';
-      newTitleInput.setAttribute('aria-label', 'Note title');
-
-      newTitleInput.addEventListener('blur', () => {
-        void this.handleTitleSubmit(newTitleInput.value);
-      });
-
-      newTitleInput.addEventListener('keydown', (event) => {
-        if (event.key === 'Enter') {
-          event.preventDefault();
-          newTitleInput.blur();
-          return;
-        }
-
-        if (event.key === 'Escape') {
-          event.preventDefault();
-          if (this.currentNote) {
-            newTitleInput.value = this.currentNote.title;
-          }
-          newTitleInput.blur();
-        }
-      });
-
-      titleElement.appendChild(newTitleInput);
-      titleInput = newTitleInput;
-    }
-
-    if (!titleInput) {
-      return;
-    }
-
-    if (document.activeElement !== titleInput) {
-      titleInput.value = note.title;
-    }
-  }
-
-  private renderMeta(note: Note): void {
-    const metaElement = this.headerContainer.querySelector<HTMLElement>('.note-meta');
-    if (!metaElement) {
-      return;
-    }
-
-    metaElement.innerHTML = '';
-
-    const createdItem = document.createElement('span');
-    createdItem.className = 'note-meta-item';
-    createdItem.textContent = `Created: ${formatDate(note.created)}`;
-    metaElement.appendChild(createdItem);
-
-    const updatedItem = document.createElement('span');
-    updatedItem.className = 'note-meta-item';
-    updatedItem.textContent = `Updated: ${formatDate(note.updated)}`;
-    metaElement.appendChild(updatedItem);
   }
 
   private renderTags(note: Note): void {
@@ -1104,7 +1033,7 @@ export class NoteView {
     addTagInput.placeholder = 'Add a tag';
 
     const positionPopover = (): void => {
-      const panelElement = addTagControl.closest<HTMLElement>('.note-view-panel');
+      const panelElement = addTagControl.closest<HTMLElement>('.note-view-panel, .comments-panel');
       if (!panelElement) {
         return;
       }
@@ -1301,37 +1230,6 @@ export class NoteView {
     return left.every((tag, index) => tag === right[index]);
   }
 
-  private async handleTitleSubmit(rawTitle: string): Promise<void> {
-    if (!this.currentNote) {
-      return;
-    }
-
-    const nextTitle = rawTitle.trim();
-    if (!nextTitle) {
-      this.renderTitle(this.currentNote);
-      return;
-    }
-
-    if (nextTitle === this.currentNote.title) {
-      return;
-    }
-
-    await this.saveMetadata({
-      title: nextTitle,
-      tags: this.currentNote.tags,
-    });
-  }
-
-  private getDraftTitle(): string {
-    const titleInput = this.headerContainer.querySelector<HTMLInputElement>('.note-title-input');
-    const draftTitle = titleInput?.value.trim();
-    if (draftTitle) {
-      return draftTitle;
-    }
-
-    return this.currentNote?.title ?? '';
-  }
-
   private handleTagAdd(input: HTMLInputElement): void {
     if (!this.currentNote) {
       return;
@@ -1352,7 +1250,6 @@ export class NoteView {
     }
 
     void this.saveMetadata({
-      title: this.getDraftTitle(),
       tags: [...this.currentNote.tags, nextTag],
     });
   }
@@ -1371,7 +1268,6 @@ export class NoteView {
     }
 
     void this.saveMetadata({
-      title: this.getDraftTitle(),
       tags: nextTags,
     });
   }
@@ -1381,24 +1277,14 @@ export class NoteView {
       return;
     }
 
-    const normalizedTitle = update.title.trim();
-    if (!normalizedTitle) {
-      this.renderHeader(this.currentNote);
-      return;
-    }
-
     const normalizedTags = this.normalizeTags(update.tags);
 
-    if (
-      normalizedTitle === this.currentNote.title &&
-      this.haveSameTags(normalizedTags, this.currentNote.tags)
-    ) {
+    if (this.haveSameTags(normalizedTags, this.currentNote.tags)) {
       return;
     }
 
     if (this.isSavingMetadata) {
       this.pendingMetadataUpdate = {
-        title: normalizedTitle,
         tags: normalizedTags,
       };
       return;
@@ -1409,11 +1295,7 @@ export class NoteView {
 
     try {
       const noteId = this.currentNote.id;
-      const updatedNote = await this.onNoteMetadataSaveCallback(
-        noteId,
-        normalizedTitle,
-        normalizedTags,
-      );
+      const updatedNote = await this.onNoteMetadataSaveCallback(noteId, normalizedTags);
 
       if (!updatedNote || this.currentNote?.id !== noteId) {
         return;
@@ -1590,16 +1472,6 @@ export class NoteView {
     this.lastSavedContent = '';
     this.isApplyingContent = false;
     this.hideSelectionTooltip();
-
-    const titleElement = this.headerContainer.querySelector<HTMLElement>('.note-title');
-    if (titleElement) {
-      titleElement.textContent = 'Select a note';
-    }
-
-    const metaElement = this.headerContainer.querySelector<HTMLElement>('.note-meta');
-    if (metaElement) {
-      metaElement.innerHTML = '';
-    }
 
     const tagsElement = this.headerContainer.querySelector<HTMLElement>('.note-tags');
     if (tagsElement) {

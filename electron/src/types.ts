@@ -24,9 +24,6 @@ export interface Note {
   id: string;
   title: string;
   tags: string[];
-  created: string;
-  updated: string;
-  source: string;
   commentRev: number;
   comments: NoteComment[];
   content: string;
@@ -77,7 +74,6 @@ export interface UpdateNotePayload {
 
 export interface UpdateNoteMetadataPayload {
   noteId: string;
-  title: string;
   tags: string[];
 }
 
@@ -114,7 +110,6 @@ export interface PreloadApi {
   updateNote: (noteId: string, content: string) => Promise<CommentMutationResult>;
   updateNoteMetadata: (
     noteId: string,
-    title: string,
     tags: string[],
   ) => Promise<CommentMutationResult>;
   addComment: (
