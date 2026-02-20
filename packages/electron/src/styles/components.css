@@ -253,24 +253,6 @@
   margin-right: auto;
 }
 
-.note-last-saved-overlay {
-  position: absolute;
-  right: 16px;
-  bottom: 12px;
-  font-size: 11px;
-  color: var(--text-muted);
-  opacity: 0.6;
-  padding: 3px 8px;
-  border-radius: 10px;
-  background-color: rgba(0, 0, 0, 0.25);
-  backdrop-filter: blur(2px);
-  pointer-events: none;
-  user-select: none;
-}
-
-.note-last-saved-overlay.hidden {
-  display: none;
-}
 
 .heading-action-btn {
   position: absolute;

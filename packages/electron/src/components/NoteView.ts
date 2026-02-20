@@ -33,7 +33,6 @@ export class NoteView {
   private editor: Editor | null;
   private currentNote: Note | null;
   private tooltip: HTMLDivElement | null;
-  private lastSavedOverlay: HTMLDivElement | null;
   private onCommentCreateCallback: CommentCreateHandler | null;
   private onNoteSaveCallback: NoteSaveHandler | null;
   private onNoteMetadataSaveCallback: NoteMetadataSaveHandler | null;
@@ -68,7 +67,6 @@ export class NoteView {
     this.editor = null;
     this.currentNote = null;
     this.tooltip = null;
-    this.lastSavedOverlay = null;
     this.onCommentCreateCallback = null;
     this.onNoteSaveCallback = null;
     this.onNoteMetadataSaveCallback = null;
@@ -698,7 +696,6 @@ export class NoteView {
     }
 
     this.isSaving = true;
-    this.renderLastSavedStatus('Saving...');
 
     try {
       const noteId = this.currentNote.id;
@@ -714,7 +711,6 @@ export class NoteView {
           this.lastSavedContent = contentToSave;
           this.currentNote = { ...updatedNote, content: latestContent };
           this.renderHeader(this.currentNote);
-          this.renderLastSavedStatus();
 
           if (latestContent !== contentToSave) {
             this.pendingAutosave = true;
@@ -730,9 +726,6 @@ export class NoteView {
       console.error('Error saving note:', error);
     } finally {
       this.isSaving = false;
-      if (this.currentNote) {
-        this.renderLastSavedStatus();
-      }
 
       if (this.pendingAutosave) {
         this.pendingAutosave = false;
@@ -881,44 +874,6 @@ export class NoteView {
     return Math.max(1, Math.min(doc.content.size - 1, low));
   }
 
-  private ensureLastSavedOverlay(): void {
-    if (this.lastSavedOverlay) {
-      return;
-    }
-
-    const panel = this.contentContainer.parentElement;
-    if (!panel) {
-      return;
-    }
-
-    const overlay = document.createElement('div');
-    overlay.className = 'note-last-saved-overlay hidden';
-    panel.appendChild(overlay);
-    this.lastSavedOverlay = overlay;
-  }
-
-  private renderLastSavedStatus(overrideText?: string): void {
-    this.ensureLastSavedOverlay();
-
-    if (!this.lastSavedOverlay) {
-      return;
-    }
-
-    if (!this.currentNote) {
-      this.lastSavedOverlay.classList.add('hidden');
-      return;
-    }
-
-    this.lastSavedOverlay.classList.remove('hidden');
-
-    if (overrideText) {
-      this.lastSavedOverlay.textContent = overrideText;
-      return;
-    }
-
-    this.lastSavedOverlay.textContent = 'Saved';
-  }
-
   render(note: Note | null): void {
     if (!note) {
       this.renderEmpty();
@@ -945,7 +900,6 @@ export class NoteView {
     this.lastSavedContent = note.content;
     this.renderHeader(note);
     this.renderContent(note);
-    this.renderLastSavedStatus();
   }
 
   private renderHeader(note: Note): void {
@@ -1244,7 +1198,6 @@ export class NoteView {
     }
 
     this.isSavingMetadata = true;
-    this.renderLastSavedStatus('Saving...');
 
     try {
       const noteId = this.currentNote.id;
@@ -1263,7 +1216,6 @@ export class NoteView {
       };
 
       this.renderHeader(this.currentNote);
-      this.renderLastSavedStatus();
 
       if (hasUnsavedEditorChanges) {
         this.scheduleAutosave();
@@ -1277,10 +1229,7 @@ export class NoteView {
         const nextUpdate = this.pendingMetadataUpdate;
         this.pendingMetadataUpdate = null;
         void this.saveMetadata(nextUpdate);
-        return;
       }
-
-      this.renderLastSavedStatus();
     }
   }
 
@@ -1439,8 +1388,6 @@ export class NoteView {
     this.contentContainer.innerHTML =
       '<p class="empty-state">Select a note from the list to view its content.</p>';
 
-    this.renderLastSavedStatus();
-
     if (this.editor) {
       this.editor.destroy();
       this.editor = null;
@@ -1464,11 +1411,6 @@ export class NoteView {
     if (this.tooltip) {
       this.tooltip.remove();
       this.tooltip = null;
-    }
-
-    if (this.lastSavedOverlay) {
-      this.lastSavedOverlay.remove();
-      this.lastSavedOverlay = null;
     }
 
     if (this.contentBackgroundMouseHandler) {
