@@ -1,9 +1,5 @@
-import type { CommentAffinity, CommentAnchor, CommentStatus, NoteComment } from '../types';
-
-export interface CharRange {
-  from: number;
-  to: number;
-}
+import type { CommentAffinity, CommentAnchor, CommentStatus, NoteComment } from '../types.js';
+import { hashQuote } from './anchoring.js';
 
 export interface TextEditOp {
   at: number;
@@ -11,45 +7,8 @@ export interface TextEditOp {
   insertLen: number;
 }
 
-const defaultStartAffinity: CommentAffinity = 'after';
-const defaultEndAffinity: CommentAffinity = 'before';
-
-export function hashQuote(text: string): string {
-  let hash = 0xcbf29ce484222325n;
-  const prime = 0x100000001b3n;
-
-  for (let index = 0; index < text.length; index += 1) {
-    hash ^= BigInt(text.charCodeAt(index));
-    hash = (hash * prime) & 0xffffffffffffffffn;
-  }
-
-  return hash.toString(16).padStart(16, '0');
-}
-
-export function buildAnchorFromRange(
-  content: string,
-  from: number,
-  to: number,
-  rev: number,
-): CommentAnchor {
-  const normalizedFrom = Math.floor(from);
-  const normalizedTo = Math.floor(to);
-  if (normalizedFrom < 0 || normalizedTo <= normalizedFrom || normalizedTo > content.length) {
-    throw new Error('Invalid comment anchor range');
-  }
-
-  const quote = content.slice(normalizedFrom, normalizedTo);
-
-  return {
-    from: normalizedFrom,
-    to: normalizedTo,
-    rev: Math.max(0, Math.floor(rev)),
-    startAffinity: defaultStartAffinity,
-    endAffinity: defaultEndAffinity,
-    quote,
-    quoteHash: hashQuote(quote),
-  };
-}
+const DEFAULT_START_AFFINITY: CommentAffinity = 'after';
+const DEFAULT_END_AFFINITY: CommentAffinity = 'before';
 
 export function deriveTextEditOps(before: string, after: string): TextEditOp[] {
   if (before === after) {
@@ -94,44 +53,13 @@ export function remapCommentsForEdit(
   return { comments: remapped, nextRev };
 }
 
-export function resolveCommentRange(content: string, comment: NoteComment): CharRange | null {
-  const normalized = normalizeComment(comment, content, comment.anchor.rev);
-  if (normalized.status === 'detached') {
-    return null;
-  }
-
-  const { from, to } = normalized.anchor;
-  if (from < 0 || to <= from || to > content.length) {
-    return null;
-  }
-
-  return { from, to };
-}
-
-export function getAllHighlightRanges(content: string, comments: NoteComment[]): CharRange[] {
-  if (!comments || comments.length === 0) {
-    return [];
-  }
-
-  const ranges: CharRange[] = [];
-  for (const comment of comments) {
-    const range = resolveCommentRange(content, comment);
-    if (range) {
-      ranges.push(range);
-    }
-  }
-
-  ranges.sort((a, b) => a.from - b.from);
-  return mergeRanges(ranges);
-}
-
 function remapComment(
   input: NoteComment,
   ops: TextEditOp[],
   nextContent: string,
   nextRev: number,
 ): NoteComment {
-  let comment = normalizeComment(input, nextContent, nextRev);
+  const comment = normalizeComment(input, nextContent, nextRev);
   let from = comment.anchor.from;
   let to = comment.anchor.to;
   let touched = false;
@@ -144,8 +72,8 @@ function remapComment(
       touched = true;
     }
 
-    from = transformOffset(from, comment.anchor.startAffinity ?? defaultStartAffinity, op);
-    to = transformOffset(to, comment.anchor.endAffinity ?? defaultEndAffinity, op);
+    from = transformOffset(from, comment.anchor.startAffinity ?? DEFAULT_START_AFFINITY, op);
+    to = transformOffset(to, comment.anchor.endAffinity ?? DEFAULT_END_AFFINITY, op);
   }
 
   from = clamp(from, 0, nextContent.length);
@@ -176,20 +104,25 @@ function remapComment(
   return { ...comment, anchor, status: 'attached' };
 }
 
-function normalizeComment(comment: NoteComment, content: string, fallbackRev: number): NoteComment {
+export function normalizeComment(
+  comment: NoteComment,
+  content: string,
+  fallbackRev: number,
+): NoteComment {
   const from = clamp(Math.floor(comment.anchor.from ?? 0), 0, content.length);
   const to = clamp(Math.floor(comment.anchor.to ?? 0), 0, content.length);
   const hasRange = to > from;
 
-  const startAffinity = normalizeAffinity(comment.anchor.startAffinity, defaultStartAffinity);
-  const endAffinity = normalizeAffinity(comment.anchor.endAffinity, defaultEndAffinity);
+  const startAffinity = normalizeAffinity(comment.anchor.startAffinity, DEFAULT_START_AFFINITY);
+  const endAffinity = normalizeAffinity(comment.anchor.endAffinity, DEFAULT_END_AFFINITY);
   const quote = comment.anchor.quote ?? (hasRange ? content.slice(from, to) : '');
   const quoteHash = comment.anchor.quoteHash ?? (quote ? hashQuote(quote) : undefined);
-  const rev = Number.isFinite(comment.anchor.rev) ? Math.max(0, Math.floor(comment.anchor.rev)) : 0;
+  const rev =
+    Number.isFinite(comment.anchor.rev) ? Math.max(0, Math.floor(comment.anchor.rev)) : 0;
 
   return {
     ...comment,
-    status: normalizeStatus(comment.status, hasRange),
+    status: normalizeCommentStatus(comment.status, hasRange),
     anchor: {
       ...comment.anchor,
       from,
@@ -203,7 +136,10 @@ function normalizeComment(comment: NoteComment, content: string, fallbackRev: nu
   };
 }
 
-function normalizeStatus(status: CommentStatus | string | undefined, hasRange: boolean): CommentStatus {
+function normalizeCommentStatus(
+  status: CommentStatus | string | undefined,
+  hasRange: boolean,
+): CommentStatus {
   if (status === 'attached' || status === 'stale' || status === 'detached') {
     return status;
   }
@@ -222,7 +158,11 @@ function normalizeAffinity(
   return fallback;
 }
 
-function transformOffset(offset: number, affinity: CommentAffinity, op: TextEditOp): number {
+export function transformOffset(
+  offset: number,
+  affinity: CommentAffinity,
+  op: TextEditOp,
+): number {
   if (offset < op.at) {
     return offset;
   }
@@ -248,7 +188,7 @@ function transformOffset(offset: number, affinity: CommentAffinity, op: TextEdit
   return op.at;
 }
 
-function commonPrefixLen(a: string, b: string): number {
+export function commonPrefixLen(a: string, b: string): number {
   const limit = Math.min(a.length, b.length);
   let index = 0;
   while (index < limit && a[index] === b[index]) {
@@ -257,7 +197,7 @@ function commonPrefixLen(a: string, b: string): number {
   return index;
 }
 
-function commonSuffixLen(a: string, b: string): number {
+export function commonSuffixLen(a: string, b: string): number {
   const limit = Math.min(a.length, b.length);
   let index = 0;
   while (index < limit && a[a.length - 1 - index] === b[b.length - 1 - index]) {
@@ -270,27 +210,6 @@ function rangesOverlap(aStart: number, aEnd: number, bStart: number, bEnd: numbe
   return aStart < bEnd && bStart < aEnd;
 }
 
-function clamp(value: number, minValue: number, maxValue: number): number {
+export function clamp(value: number, minValue: number, maxValue: number): number {
   return Math.max(minValue, Math.min(maxValue, value));
-}
-
-function mergeRanges(ranges: CharRange[]): CharRange[] {
-  if (ranges.length === 0) {
-    return [];
-  }
-
-  const merged: CharRange[] = [{ ...ranges[0] }];
-
-  for (let index = 1; index < ranges.length; index += 1) {
-    const current = ranges[index];
-    const last = merged[merged.length - 1];
-
-    if (current.from <= last.to) {
-      last.to = Math.max(last.to, current.to);
-    } else {
-      merged.push({ ...current });
-    }
-  }
-
-  return merged;
 }

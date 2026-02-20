@@ -1,3 +1,8 @@
+/**
+ * Types for the Electron app.
+ * These are defined locally to avoid bundling the engine in the renderer.
+ */
+
 export type CommentAffinity = 'before' | 'after';
 export type CommentStatus = 'attached' | 'stale' | 'detached';
 
@@ -13,11 +18,11 @@ export interface CommentAnchor {
 
 export interface NoteComment {
   id: string;
+  content: string;
   author: string;
   created: string;
-  content: string;
-  status: CommentStatus;
   anchor: CommentAnchor;
+  status: CommentStatus;
 }
 
 export interface Note {
@@ -35,15 +40,7 @@ export interface Note {
 export interface NotesListResult {
   notes: Note[];
   directories: string[];
-  noDirectory: boolean;
-}
-
-export type NotesListResponse = Note[] | NotesListResult;
-
-export interface CommentMutationResult {
-  success: boolean;
-  note?: Note;
-  error?: string;
+  noDirectory?: boolean;
 }
 
 export interface OperationResult {
@@ -51,53 +48,15 @@ export interface OperationResult {
   error?: string;
 }
 
+export interface CommentMutationResult extends OperationResult {
+  note?: Note;
+}
+
 export interface DirectoryMutationResult extends OperationResult {
-  path?: string;
+  directories?: string[];
 }
 
-export interface AddCommentPayload {
-  noteId: string;
-  content: string;
-  author: string;
-  anchor: CommentAnchor;
-}
-
-export interface DeleteCommentPayload {
-  noteId: string;
-  commentId: string;
-}
-
-export interface UpdateNotePayload {
-  noteId: string;
-  content: string;
-}
-
-export interface UpdateNoteMetadataPayload {
-  noteId: string;
-  tags: string[];
-}
-
-export interface CreateNotePayload {
-  title: string;
-  directory: string;
-}
-
-export interface DeleteNotePayload {
-  noteId: string;
-}
-
-export interface MoveNotePayload {
-  noteId: string;
-  directory: string;
-}
-
-export interface CreateDirectoryPayload {
-  path: string;
-}
-
-export interface DeleteDirectoryPayload {
-  path: string;
-}
+export type NotesListResponse = Note[] | NotesListResult;
 
 export interface PreloadApi {
   listNotes: () => Promise<NotesListResult>;

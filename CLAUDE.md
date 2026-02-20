@@ -1,182 +1,153 @@
 # AgentNotes
 
-A local-first CLI knowledge base storing markdown notes with YAML frontmatter.
+A local-first knowledge base with TypeScript CLI and Electron GUI, storing markdown notes with sidecar JSON metadata.
 
 ## Project Structure
 
-- `cmd/agentnotes/main.go` - CLI entrypoint
-- `internal/notes/model.go` - Note struct, frontmatter parsing/marshaling
-- `internal/notes/store.go` - File-based CRUD operations
-- `internal/notes/search.go` - Search and filter logic
-- `internal/cli/commands.go` - Cobra CLI command implementations
-- `internal/cli/display.go` - Terminal formatting with ANSI colors
-- `electron/` - Electron-based GUI application
-  - `main.ts` - Electron main process, window creation, IPC handlers
-  - `preload.ts` - Context bridge exposing APIs to renderer
-  - `src/renderer.ts` - Renderer entry point, component initialization
-  - `src/types.ts` - Shared TypeScript interfaces for notes/comments/IPC payloads
-  - `tsconfig.main.json` - TypeScript config for main/preload process build
-  - `tsconfig.renderer.json` - TypeScript config for renderer type checking
-  - `eslint.config.mjs` - ESLint config including strict TypeScript rules
-  - `src/index.html` - Main HTML with custom title bar
-  - `src/styles/main.css` - Core styles including title bar
-  - `src/styles/components.css` - Component-specific styles
-  - `src/components/` - UI components (NoteList, NoteView, CommentsPanel)
-  - `src/lib/` - Utilities (noteStore, highlighter)
+This is a pnpm monorepo with three packages:
+
+```
+packages/
+├── engine/      # Shared TypeScript business logic
+├── cli/         # TypeScript CLI
+└── electron/    # Electron GUI application
+```
+
+### Engine (`@agentnotes/engine`)
+Core business logic used by both CLI and Electron:
+- `src/types.ts` - All shared types (Note, NoteComment, CommentAnchor, payloads, results)
+- `src/comments/` - Comment anchoring, transformation during edits, resolution
+- `src/storage/` - Markdown parsing, sidecar JSON read/write, filesystem operations
+- `src/notes/` - NoteStore class (central API), search functionality
+- `src/utils/` - Slugify, normalization, formatting (toTitleCase), validation
+
+### CLI (`@agentnotes/cli`)
+TypeScript CLI built with Commander:
+- `src/cli.ts` - Commander setup, store initialization
+- `src/commands/` - Individual command implementations
+- `src/display/format.ts` - ANSI color formatting
+- `src/utils/` - stdin, editor, note resolution utilities
+
+### Electron (`packages/electron`)
+GUI application:
+- `main.ts` - Electron main process, IPC handlers (thin wrapper around NoteStore)
+- `preload.ts` - Context bridge exposing APIs to renderer
+- `src/renderer.ts` - Renderer entry point
+- `src/types.ts` - Local type definitions for renderer (browser-compatible)
+- `src/components/` - UI components (NoteList, NoteView, CommentsPanel)
+- `src/lib/browser-utils.ts` - Browser-compatible utilities (toTitleCase, anchoring, highlights)
+- `src/lib/noteStore.ts` - IPC caching layer
 
 ## Storage
 
-Notes stored in `.agentnotes/notes/` (relative to current working directory) as markdown files with format:
+Notes are stored as markdown files with sidecar `.json` files for metadata:
 ```
-2024-01-15-slugified-title.md
-```
-
-Notes can be organized in subdirectories:
-```
-.agentnotes/notes/
-├── projects/
-│   ├── frontend/
-│   │   └── 2024-02-01-react-components.md
-│   └── backend/
-│       └── 2024-02-01-api-endpoints.md
-├── meetings/
-│   └── 2024-02-03-standup-notes.md
-└── 2024-01-15-root-level-note.md
+notes-directory/
+├── 2024-01-15-my-note.md        # Note content
+├── 2024-01-15-my-note.md.json   # Metadata (tags, comments, commentRev)
+└── projects/
+    ├── 2024-02-01-react-guide.md
+    └── 2024-02-01-react-guide.md.json
 ```
 
-Each note has YAML frontmatter with: id (ULID), title, tags, created, updated, source, comment_rev, comments.
-
-The CLI operates relative to the current working directory - each project can have its own independent notes.
+The CLI operates in the current working directory. The Electron app lets users select any directory.
 
 ## Build & Run
 
+### Install Dependencies
+```bash
+pnpm install
+```
+
+Note: You may need to run the post-install scripts for electron and esbuild:
+```bash
+node node_modules/.pnpm/electron@28.3.3/node_modules/electron/install.js
+node node_modules/.pnpm/esbuild@0.24.2/node_modules/esbuild/install.js
+```
+
+### Build All Packages
+```bash
+pnpm -r build
+```
+
 ### CLI
 ```bash
-go build -o agentnotes ./cmd/agentnotes
-./agentnotes --help
+cd packages/cli
+pnpm build
+node dist/index.js --help
 ```
+
+CLI commands:
+- `agentnotes add <title>` - Create a new note
+- `agentnotes list` - List notes (--tags, --limit, --sort)
+- `agentnotes show <id-or-title>` - Display a note (--comments)
+- `agentnotes search <query>` - Search notes
+- `agentnotes edit <id-or-title>` - Edit note content/metadata
+- `agentnotes delete <id-or-title>` - Delete a note
+- `agentnotes tags` - List all tags with counts
+- `agentnotes cat <id-or-title>` - Output raw markdown
+- `agentnotes comment add|list|delete` - Manage comments
 
 ### GUI (Electron)
 ```bash
-cd electron
-npm install
-npm run typecheck
-npm run lint
-npm start
+cd packages/electron
+pnpm start
 ```
 
-The Electron app features:
-- Custom draggable title bar with macOS-style traffic light buttons (close/minimize/maximize)
-- Frameless window (`frame: false` in main process config)
-- Three-panel layout
-- SVG-based window control buttons for pixel-perfect circles
-- Directory hierarchy with collapsible folders in the note list
+Development with auto-rebuild:
+```bash
+cd packages/electron
+pnpm dev
+```
 
-Electron development checks:
-- `npm run typecheck` validates TypeScript in main, preload, and renderer code
-- `npm run lint` runs ESLint with `@typescript-eslint/no-explicit-any` set to `error`
+### Run Tests
+```bash
+cd packages/engine
+pnpm test
+```
 
-The GUI provides a three-panel layout:
-- Left: Note list with directory tree (folders are collapsible, notes show document icons)
-- Center: Note content with metadata (rendered as styled markdown via TipTap)
-- Right: Inline comments panel showing comments with text previews
+### Type Checking
+```bash
+pnpm -r typecheck
+```
 
-### Managing Notes in GUI
-Users can manage notes directly from the left sidebar and note header:
-1. Right-click in the note list to open a context menu with:
-   - `New Note` (creates in the clicked location)
-   - `New Folder` (creates in the clicked location)
-2. Move notes by dragging a note and dropping it on a folder (or root area).
-3. Delete the current note from the `...` menu in the top-right of the note header.
-
-Create/move/delete operations update markdown files directly on disk while preserving note frontmatter metadata.
-
-### Creating Comments in GUI
-Users can create comments by highlighting text in the note view:
-1. Select text in the note content
-2. A tooltip appears above the selection with a "Comment" button
-3. Click the button to open a pending comment card in the comments panel
-4. Type the comment and press Enter to save (Escape to cancel, Shift+Enter for newlines)
+## Comment System
 
 Comments use deterministic range anchors:
-- `anchor.from` - start character offset (0-based)
-- `anchor.to` - end character offset (exclusive)
-- `anchor.rev` - note revision at time of anchoring
-- `anchor.start_affinity` / `anchor.end_affinity` - boundary mapping policy for inserts at anchor edges
-- `anchor.quote` / `anchor.quote_hash` - stored quote and hash for integrity checks after remapping
+- `anchor.from` / `anchor.to` - Character offsets (0-based, exclusive end)
+- `anchor.rev` - Note revision at time of anchoring
+- `anchor.startAffinity` / `anchor.endAffinity` - Boundary mapping policy (`before` or `after`)
+- `anchor.quote` / `anchor.quoteHash` - Stored quote and FNV-1a hash for integrity checks
 - `status` - `attached`, `stale`, or `detached`
 
-On save, note edits are converted into deterministic text operations and comment ranges are transformed through those operations. Comments touching edited text become `stale`; ranges fully removed become `detached`.
+On save, edits are converted to text operations and comment ranges are transformed. Comments touching edited text become `stale`; collapsed ranges become `detached`.
 
-When creating comments, anchor revision must match the note's current `comment_rev` for deterministic placement.
+## GUI Features
 
-Legacy anchors (`exact`, `start`, `end`) are migrated into the deterministic model when possible; non-mappable legacy anchors remain detached instead of being guessed.
+- Custom draggable title bar with macOS-style traffic light buttons
+- Three-panel layout: note list, note content (TipTap editor), comments panel
+- Directory hierarchy with collapsible folders
+- Drag-and-drop note moving
+- Text selection creates comments with anchored highlights
+- Real-time markdown styling with autosave
 
-### Deleting Comments in GUI
-Users can delete existing comments from the comments panel:
-1. Open a note with comments
-2. Click the `Delete` button on the comment card you want to remove
-3. Confirm the deletion in the prompt
+## CLI Examples
 
-The comment is removed from YAML frontmatter and the note's `updated` timestamp is refreshed.
-
-## Testing Notes
-
-Create notes via stdin for non-interactive testing:
+### Create notes
 ```bash
-echo "content" | ./agentnotes add "Title" --tags=test
+echo "# My Note\n\nContent here" | agentnotes add "my-note" --tags=demo
+agentnotes add "Interactive Note"  # Opens $EDITOR
 ```
 
-## Edit Command
-
-The `edit` command modifies notes directly from the command line (no editor required).
-
-### Metadata editing
+### Edit notes
 ```bash
-./agentnotes edit myNote --title "New Title"
-./agentnotes edit myNote --add-tags "important,urgent"
-./agentnotes edit myNote --remove-tags "draft"
-./agentnotes edit myNote --tags "tag1,tag2"  # replaces all tags
-./agentnotes edit myNote --source "api"
+agentnotes edit "my-note" --add-tags "important"
+agentnotes edit "my-note" --append "New paragraph"
 ```
 
-### Content editing
+### Comments
 ```bash
-./agentnotes edit myNote --content "Full replacement"
-./agentnotes edit myNote --append "Added to end"
-./agentnotes edit myNote --prepend "Added to start"
-./agentnotes edit myNote --insert "3:New line here"    # insert at line 3
-./agentnotes edit myNote --replace-line "5:Replaced"   # replace line 5
-./agentnotes edit myNote --delete-line 4               # delete line 4
-echo "New content" | ./agentnotes edit myNote          # via stdin
-```
-
-## Comment Command
-
-The `comment` command manages comments on notes. Comments are stored in the note's YAML frontmatter.
-
-### Add comments
-```bash
-./agentnotes comment add "My Note" "This is a comment"
-./agentnotes comment add "My Note" --author=claude "AI comment"
-./agentnotes comment add "My Note" "Comment on selected text" --from=42 --to=57
-./agentnotes comment add "My Note" "Comment on unique text" --exact="selected text"
-echo "comment" | ./agentnotes comment add "My Note" --from=42 --to=57
-```
-
-### List comments
-```bash
-./agentnotes comment list "My Note"
-./agentnotes comment list "My Note" --limit=5
-```
-
-### Delete comments
-```bash
-./agentnotes comment delete "My Note" <comment-id>
-./agentnotes comment delete "My Note" <comment-id> --force
-```
-
-### Show note with comments
-```bash
-./agentnotes show "My Note" --comments
+agentnotes comment add "my-note" "Great point!" --exact="specific text"
+agentnotes comment list "my-note"
+agentnotes show "my-note" --comments
 ```

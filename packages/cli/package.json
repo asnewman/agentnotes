@@ -1,0 +1,22 @@
+{
+  "name": "@agentnotes/cli",
+  "version": "1.0.0",
+  "type": "module",
+  "main": "./dist/index.js",
+  "bin": {
+    "agentnotes": "./dist/index.js"
+  },
+  "scripts": {
+    "build": "tsc",
+    "start": "node dist/index.js",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@agentnotes/engine": "workspace:*",
+    "commander": "^13.0.0"
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.2",
+    "typescript": "^5.7.2"
+  }
+}
