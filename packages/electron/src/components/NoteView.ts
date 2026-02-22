@@ -134,6 +134,7 @@ export class NoteView {
 
     this.editor = new Editor({
       element: editorElement,
+      enableInputRules: false,
       extensions: [
         StarterKit,
         CommentHighlight.configure({
@@ -738,7 +739,7 @@ export class NoteView {
       return '';
     }
 
-    return this.tipTapHtmlToMarkdown(this.editor.getHTML());
+    return this.editor.state.doc.textBetween(0, this.editor.state.doc.content.size, '\n', '\n');
   }
 
   private handleEditorUpdate(editor: Editor): void {
@@ -752,7 +753,7 @@ export class NoteView {
 
     this.scheduleMarkdownStyling(editor);
 
-    const content = this.tipTapHtmlToMarkdown(editor.getHTML());
+    const content = editor.state.doc.textBetween(0, editor.state.doc.content.size, '\n', '\n');
     if (content === this.lastSavedContent) {
       return;
     }
@@ -805,11 +806,10 @@ export class NoteView {
       return;
     }
 
-    const currentHtml = editor.getHTML();
-    const content = this.tipTapHtmlToMarkdown(currentHtml);
+    const content = editor.state.doc.textBetween(0, editor.state.doc.content.size, '\n', '\n');
     const normalizedHtml = this.markdownToTipTap(content);
 
-    if (currentHtml === normalizedHtml) {
+    if (editor.getHTML() === normalizedHtml) {
       return;
     }
 
@@ -1260,55 +1260,10 @@ export class NoteView {
       return '<p></p>';
     }
 
-    const lines = markdown.split('\n');
-    const result: string[] = [];
-    let i = 0;
-
-    while (i < lines.length) {
-      const line = lines[i];
-
-      // Check for unordered list item (-, *, +)
-      const unorderedMatch = line.match(/^(\s*)([-*+])\s+(.*)$/);
-      if (unorderedMatch) {
-        const listItems: string[] = [];
-        while (i < lines.length) {
-          const currentLine = lines[i];
-          const itemMatch = currentLine.match(/^(\s*)([-*+])\s+(.*)$/);
-          if (!itemMatch) break;
-          const escapedContent = this.escapeHtml(itemMatch[3]);
-          const styledContent = this.applyInlineMarkdownStyles(escapedContent);
-          listItems.push(`<li><p>${styledContent}</p></li>`);
-          i++;
-        }
-        result.push(`<ul>${listItems.join('')}</ul>`);
-        continue;
-      }
-
-      // Check for ordered list item (1., 2., etc.)
-      const orderedMatch = line.match(/^(\s*)(\d+)\.\s+(.*)$/);
-      if (orderedMatch) {
-        const listItems: string[] = [];
-        const startNum = parseInt(orderedMatch[2], 10);
-        while (i < lines.length) {
-          const currentLine = lines[i];
-          const itemMatch = currentLine.match(/^(\s*)(\d+)\.\s+(.*)$/);
-          if (!itemMatch) break;
-          const escapedContent = this.escapeHtml(itemMatch[3]);
-          const styledContent = this.applyInlineMarkdownStyles(escapedContent);
-          listItems.push(`<li><p>${styledContent}</p></li>`);
-          i++;
-        }
-        const startAttr = startNum !== 1 ? ` start="${startNum}"` : '';
-        result.push(`<ol${startAttr}>${listItems.join('')}</ol>`);
-        continue;
-      }
-
-      // Regular line processing
-      result.push(this.markdownLineToTipTap(line));
-      i++;
-    }
-
-    return result.join('');
+    return markdown
+      .split('\n')
+      .map((line) => this.markdownLineToTipTap(line))
+      .join('');
   }
 
   private markdownLineToTipTap(line: string): string {
@@ -1362,209 +1317,6 @@ export class NoteView {
 
   private escapeHtml(value: string): string {
     return value.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
-  }
-
-  private tipTapHtmlToMarkdown(html: string): string {
-    const div = document.createElement('div');
-    div.innerHTML = html;
-
-    const processInlineContent = (element: Element): string => {
-      let result = '';
-      for (const node of element.childNodes) {
-        if (node.nodeType === Node.TEXT_NODE) {
-          result += node.textContent ?? '';
-        } else if (node.nodeType === Node.ELEMENT_NODE) {
-          const el = node as Element;
-          const tagName = el.tagName.toLowerCase();
-          const inner = processInlineContent(el);
-
-          switch (tagName) {
-            case 'strong':
-              result += `**${inner}**`;
-              break;
-            case 'em':
-              result += `*${inner}*`;
-              break;
-            case 'code':
-              result += `\`${inner}\``;
-              break;
-            case 's':
-              result += `~~${inner}~~`;
-              break;
-            case 'mark':
-              result += inner;
-              break;
-            default:
-              result += inner;
-          }
-        }
-      }
-      return result;
-    };
-
-    const processNode = (node: Element, indent = ''): string[] => {
-      const lines: string[] = [];
-      const tagName = node.tagName.toLowerCase();
-
-      switch (tagName) {
-        case 'h1':
-        case 'h2':
-        case 'h3':
-        case 'h4':
-        case 'h5':
-        case 'h6': {
-          const level = parseInt(tagName[1], 10);
-          const prefix = '#'.repeat(level);
-          // Strip any leading # characters that might already be in the text
-          const content = processInlineContent(node).replace(/^#+\s*/, '');
-          lines.push(`${prefix} ${content}`);
-          break;
-        }
-        case 'p':
-          lines.push(processInlineContent(node));
-          break;
-        case 'blockquote': {
-          for (const child of node.children) {
-            const childLines = processNode(child as Element, indent);
-            for (const line of childLines) {
-              // Strip any leading > that might already be in the text
-              const cleanLine = line.replace(/^>\s*/, '');
-              lines.push(`> ${cleanLine}`);
-            }
-          }
-          break;
-        }
-        case 'ul': {
-          for (const li of node.children) {
-            if (li.tagName.toLowerCase() === 'li') {
-              const liContent = this.processListItem(li as Element, indent);
-              lines.push(...liContent.map((line, idx) => (idx === 0 ? `${indent}- ${line}` : line)));
-            }
-          }
-          break;
-        }
-        case 'ol': {
-          let num = 1;
-          const startAttr = node.getAttribute('start');
-          if (startAttr) {
-            num = parseInt(startAttr, 10) || 1;
-          }
-          for (const li of node.children) {
-            if (li.tagName.toLowerCase() === 'li') {
-              const liContent = this.processListItem(li as Element, indent);
-              lines.push(
-                ...liContent.map((line, idx) => (idx === 0 ? `${indent}${num}. ${line}` : line)),
-              );
-              num++;
-            }
-          }
-          break;
-        }
-        case 'pre': {
-          const codeEl = node.querySelector('code');
-          const codeText = codeEl ? codeEl.textContent ?? '' : node.textContent ?? '';
-          lines.push('```');
-          lines.push(...codeText.split('\n'));
-          lines.push('```');
-          break;
-        }
-        case 'hr':
-          lines.push('---');
-          break;
-        default:
-          for (const child of node.children) {
-            lines.push(...processNode(child as Element, indent));
-          }
-      }
-
-      return lines;
-    };
-
-    const resultLines: string[] = [];
-    for (const child of div.children) {
-      resultLines.push(...processNode(child as Element));
-    }
-
-    return resultLines.join('\n');
-  }
-
-  private processListItem(li: Element, indent: string): string[] {
-    const lines: string[] = [];
-    // Strip leading list markers that might already be in the text
-    const stripListMarker = (text: string): string => {
-      return text.replace(/^(\s*[-*+]|\s*\d+\.)\s*/, '');
-    };
-    for (const child of li.childNodes) {
-      if (child.nodeType === Node.TEXT_NODE) {
-        const text = child.textContent?.trim();
-        if (text) {
-          lines.push(stripListMarker(text));
-        }
-      } else if (child.nodeType === Node.ELEMENT_NODE) {
-        const el = child as Element;
-        const tagName = el.tagName.toLowerCase();
-        if (tagName === 'p') {
-          lines.push(stripListMarker(this.processInlineContentForList(el)));
-        } else if (tagName === 'ul') {
-          for (const subLi of el.children) {
-            if (subLi.tagName.toLowerCase() === 'li') {
-              const subContent = this.processListItem(subLi as Element, indent + '  ');
-              lines.push(
-                ...subContent.map((line, idx) => (idx === 0 ? `${indent}  - ${line}` : line)),
-              );
-            }
-          }
-        } else if (tagName === 'ol') {
-          let num = 1;
-          for (const subLi of el.children) {
-            if (subLi.tagName.toLowerCase() === 'li') {
-              const subContent = this.processListItem(subLi as Element, indent + '  ');
-              lines.push(
-                ...subContent.map((line, idx) =>
-                  idx === 0 ? `${indent}  ${num}. ${line}` : line,
-                ),
-              );
-              num++;
-            }
-          }
-        }
-      }
-    }
-    return lines.length > 0 ? lines : [''];
-  }
-
-  private processInlineContentForList(element: Element): string {
-    let result = '';
-    for (const node of element.childNodes) {
-      if (node.nodeType === Node.TEXT_NODE) {
-        result += node.textContent ?? '';
-      } else if (node.nodeType === Node.ELEMENT_NODE) {
-        const el = node as Element;
-        const tagName = el.tagName.toLowerCase();
-        const inner = this.processInlineContentForList(el);
-
-        switch (tagName) {
-          case 'strong':
-            result += `**${inner}**`;
-            break;
-          case 'em':
-            result += `*${inner}*`;
-            break;
-          case 'code':
-            result += `\`${inner}\``;
-            break;
-          case 's':
-            result += `~~${inner}~~`;
-            break;
-          case 'mark':
-            result += inner;
-            break;
-          default:
-            result += inner;
-        }
-      }
-    }
-    return result;
   }
 
   private buildAnchor(content: string, startChar: number, endChar: number): CommentAnchor {
