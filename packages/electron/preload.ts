@@ -6,7 +6,9 @@ import type {
   OperationResult,
   Note,
   NotesListResult,
+  PanelPreferences,
   PreloadApi,
+  SaveImageResult,
 } from './src/types';
 
 const api: PreloadApi = {
@@ -48,6 +50,12 @@ const api: PreloadApi = {
   windowMinimize: () => ipcRenderer.send('window:minimize'),
   windowMaximize: () => ipcRenderer.send('window:maximize'),
   windowClose: () => ipcRenderer.send('window:close'),
+  openExternal: (url: string) => ipcRenderer.send('shell:openExternal', url),
+  getPanelPreferences: () => ipcRenderer.invoke('preferences:getPanels') as Promise<PanelPreferences>,
+  savePanelPreferences: (preferences: PanelPreferences) =>
+    ipcRenderer.invoke('preferences:savePanels', preferences) as Promise<boolean>,
+  saveImage: (data: string, mimeType: string) =>
+    ipcRenderer.invoke('images:save', { data, mimeType }) as Promise<SaveImageResult>,
 };
 
 contextBridge.exposeInMainWorld('api', api);

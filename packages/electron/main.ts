@@ -1,7 +1,8 @@
-import { app, BrowserWindow, dialog, ipcMain } from 'electron';
+import { app, BrowserWindow, dialog, ipcMain, shell } from 'electron';
 import type { OpenDialogOptions } from 'electron';
 import path from 'node:path';
 import fs from 'node:fs';
+import crypto from 'node:crypto';
 import Store from 'electron-store';
 import { NoteStore } from '@agentnotes/engine';
 import type {
@@ -25,6 +26,13 @@ interface StoreSchema {
   notesDirectory: string | null;
 }
 
+interface PanelPreferences {
+  noteListVisible: boolean;
+  commentsVisible: boolean;
+}
+
+const CONFIG_FILENAME = '.agentnotes-config.json';
+
 const store = new Store<StoreSchema>({
   defaults: {
     notesDirectory: null,
@@ -36,6 +44,54 @@ let noteStore: NoteStore | null = null;
 
 function getNotesDir(): string | null {
   return store.get('notesDirectory');
+}
+
+function getConfigPath(): string | null {
+  const notesDir = getNotesDir();
+  if (!notesDir) {
+    return null;
+  }
+  return path.join(notesDir, CONFIG_FILENAME);
+}
+
+function readPanelPreferences(): PanelPreferences {
+  const defaults: PanelPreferences = {
+    noteListVisible: true,
+    commentsVisible: true,
+  };
+
+  const configPath = getConfigPath();
+  if (!configPath) {
+    return defaults;
+  }
+
+  try {
+    if (!fs.existsSync(configPath)) {
+      return defaults;
+    }
+    const content = fs.readFileSync(configPath, 'utf-8');
+    const parsed = JSON.parse(content) as Partial<PanelPreferences>;
+    return {
+      noteListVisible: typeof parsed.noteListVisible === 'boolean' ? parsed.noteListVisible : defaults.noteListVisible,
+      commentsVisible: typeof parsed.commentsVisible === 'boolean' ? parsed.commentsVisible : defaults.commentsVisible,
+    };
+  } catch {
+    return defaults;
+  }
+}
+
+function writePanelPreferences(preferences: PanelPreferences): boolean {
+  const configPath = getConfigPath();
+  if (!configPath) {
+    return false;
+  }
+
+  try {
+    fs.writeFileSync(configPath, JSON.stringify(preferences, null, 2), 'utf-8');
+    return true;
+  } catch {
+    return false;
+  }
 }
 
 function ensureNoteStore(): NoteStore | null {
@@ -281,6 +337,12 @@ ipcMain.on('window:close', () => {
   mainWindow?.close();
 });
 
+ipcMain.on('shell:openExternal', (_event, url: string) => {
+  if (typeof url === 'string' && url.length > 0) {
+    void shell.openExternal(url);
+  }
+});
+
 ipcMain.handle('directory:get', async (): Promise<string | null> => {
   return getNotesDir();
 });
@@ -334,3 +396,82 @@ ipcMain.handle('directory:select', async (): Promise<string | null> => {
 
   return null;
 });
+
+ipcMain.handle('preferences:getPanels', async (): Promise<PanelPreferences> => {
+  return readPanelPreferences();
+});
+
+ipcMain.handle(
+  'preferences:savePanels',
+  async (_event, preferences: PanelPreferences): Promise<boolean> => {
+    return writePanelPreferences(preferences);
+  },
+);
+
+interface SaveImagePayload {
+  data: string; // base64 encoded image data
+  mimeType: string;
+}
+
+interface SaveImageResult {
+  success: boolean;
+  relativePath?: string;
+  error?: string;
+}
+
+function isSaveImagePayload(payload: unknown): payload is SaveImagePayload {
+  return (
+    isRecord(payload) &&
+    typeof payload.data === 'string' &&
+    typeof payload.mimeType === 'string'
+  );
+}
+
+function getExtensionFromMimeType(mimeType: string): string {
+  const mimeToExt: Record<string, string> = {
+    'image/png': 'png',
+    'image/jpeg': 'jpg',
+    'image/jpg': 'jpg',
+    'image/gif': 'gif',
+    'image/webp': 'webp',
+    'image/svg+xml': 'svg',
+  };
+  return mimeToExt[mimeType] || 'png';
+}
+
+ipcMain.handle(
+  'images:save',
+  async (_event, payload: unknown): Promise<SaveImageResult> => {
+    if (!isSaveImagePayload(payload)) {
+      return { success: false, error: 'Invalid save image payload' };
+    }
+
+    const notesDir = getNotesDir();
+    if (!notesDir) {
+      return { success: false, error: 'Notes directory not found' };
+    }
+
+    try {
+      const imagesDir = path.join(notesDir, 'images');
+      if (!fs.existsSync(imagesDir)) {
+        fs.mkdirSync(imagesDir, { recursive: true });
+      }
+
+      const extension = getExtensionFromMimeType(payload.mimeType);
+      const uniqueId = crypto.randomBytes(4).toString('hex');
+      const filename = `${uniqueId}.${extension}`;
+      const filepath = path.join(imagesDir, filename);
+
+      const imageBuffer = Buffer.from(payload.data, 'base64');
+      fs.writeFileSync(filepath, imageBuffer);
+
+      return {
+        success: true,
+        relativePath: `images/${filename}`,
+      };
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Unknown error';
+      return { success: false, error: message };
+    }
+  },
+);

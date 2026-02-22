@@ -6,6 +6,7 @@ import type {
   NotesListResponse,
   NotesListResult,
   OperationResult,
+  PanelPreferences,
 } from '../types';
 
 let notesCache: NotesListResult | null = null;
@@ -146,4 +147,12 @@ export async function deleteComment(
   }
 
   return result;
+}
+
+export async function getPanelPreferences(): Promise<PanelPreferences> {
+  return window.api.getPanelPreferences();
+}
+
+export async function savePanelPreferences(preferences: PanelPreferences): Promise<boolean> {
+  return window.api.savePanelPreferences(preferences);
 }

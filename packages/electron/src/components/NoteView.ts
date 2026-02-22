@@ -1,9 +1,13 @@
 import { Editor } from '@tiptap/core';
 import Highlight from '@tiptap/extension-highlight';
+import Image from '@tiptap/extension-image';
+import Link from '@tiptap/extension-link';
 import StarterKit from '@tiptap/starter-kit';
 import { buildAnchorFromRange, getAllHighlightRanges, toTitleCase } from '../lib/browser-utils';
-import type { CommentAnchor, Note } from '../types';
+import type { CommentAnchor, Note, PreloadApi } from '../types';
 import { createTagChip } from './TagChip';
+
+declare const api: PreloadApi;
 
 const CommentHighlight = Highlight.extend({
   inclusive: false,
@@ -60,6 +64,10 @@ export class NoteView {
   private headingMenuKeyHandler: ((event: KeyboardEvent) => void) | null;
   private isHeadingMenuOpen: boolean;
   private headingActionHideTimer: number | null;
+  private linkContextMenu: HTMLDivElement | null;
+  private linkContextMenuTarget: HTMLAnchorElement | null;
+  private linkContextMenuDismissHandler: ((event: MouseEvent) => void) | null;
+  private linkContextMenuKeyHandler: ((event: KeyboardEvent) => void) | null;
 
   constructor(headerContainer: HTMLElement, contentContainer: HTMLElement) {
     this.headerContainer = headerContainer;
@@ -102,6 +110,10 @@ export class NoteView {
     this.headingMenuKeyHandler = null;
     this.isHeadingMenuOpen = false;
     this.headingActionHideTimer = null;
+    this.linkContextMenu = null;
+    this.linkContextMenuTarget = null;
+    this.linkContextMenuDismissHandler = null;
+    this.linkContextMenuKeyHandler = null;
   }
 
   setOnCommentCreate(callback: CommentCreateHandler): void {
@@ -134,13 +146,29 @@ export class NoteView {
 
     this.editor = new Editor({
       element: editorElement,
-      enableInputRules: false,
       extensions: [
-        StarterKit,
+        StarterKit.configure({
+          bulletList: false,
+          orderedList: false,
+          listItem: false,
+        }),
         CommentHighlight.configure({
           multicolor: false,
           HTMLAttributes: {
             class: 'highlighted-comment',
+          },
+        }),
+        Link.configure({
+          openOnClick: false,
+          HTMLAttributes: {
+            class: 'editor-link',
+          },
+        }),
+        Image.configure({
+          inline: false,
+          allowBase64: false,
+          HTMLAttributes: {
+            class: 'editor-image',
           },
         }),
       ],
@@ -152,6 +180,76 @@ export class NoteView {
       onUpdate: ({ editor }: { editor: Editor }) => {
         this.handleEditorUpdate(editor);
       },
+    });
+
+    // Handle link clicks
+    editorElement.addEventListener('click', (event) => {
+      const target = event.target;
+      if (target instanceof HTMLAnchorElement && target.classList.contains('editor-link')) {
+        event.preventDefault();
+        const href = target.getAttribute('href');
+        if (href) {
+          api.openExternal(href);
+        }
+      }
+    });
+
+    // Handle right-click on links
+    editorElement.addEventListener('contextmenu', (event) => {
+      const target = event.target;
+      if (target instanceof HTMLAnchorElement && target.classList.contains('editor-link')) {
+        event.preventDefault();
+        this.showLinkContextMenu(target, event.clientX, event.clientY);
+      }
+    });
+
+    // Handle image paste from clipboard
+    editorElement.addEventListener('paste', (event) => {
+      const items = event.clipboardData?.items;
+      if (!items) {
+        return;
+      }
+
+      for (const item of items) {
+        if (item.type.startsWith('image/')) {
+          event.preventDefault();
+          const file = item.getAsFile();
+          if (file) {
+            void this.handleImageFile(file);
+          }
+          return;
+        }
+      }
+    });
+
+    // Handle image drag and drop
+    editorElement.addEventListener('drop', (event) => {
+      const files = event.dataTransfer?.files;
+      if (!files || files.length === 0) {
+        return;
+      }
+
+      for (const file of files) {
+        if (file.type.startsWith('image/')) {
+          event.preventDefault();
+          void this.handleImageFile(file);
+          return;
+        }
+      }
+    });
+
+    editorElement.addEventListener('dragover', (event) => {
+      const items = event.dataTransfer?.items;
+      if (!items) {
+        return;
+      }
+
+      for (const item of items) {
+        if (item.type.startsWith('image/')) {
+          event.preventDefault();
+          return;
+        }
+      }
     });
 
     this.ensureHeadingActionControls();
@@ -679,6 +777,171 @@ export class NoteView {
     this.scheduleAutosave();
   }
 
+  private showLinkContextMenu(linkElement: HTMLAnchorElement, x: number, y: number): void {
+    this.closeLinkContextMenu();
+
+    this.linkContextMenuTarget = linkElement;
+
+    const menu = document.createElement('div');
+    menu.className = 'link-context-menu';
+
+    const editTextBtn = document.createElement('button');
+    editTextBtn.type = 'button';
+    editTextBtn.className = 'link-context-menu-item';
+    editTextBtn.textContent = 'Edit link text';
+    editTextBtn.addEventListener('click', () => {
+      this.editLinkText();
+    });
+
+    const editUrlBtn = document.createElement('button');
+    editUrlBtn.type = 'button';
+    editUrlBtn.className = 'link-context-menu-item';
+    editUrlBtn.textContent = 'Edit URL';
+    editUrlBtn.addEventListener('click', () => {
+      this.editLinkUrl();
+    });
+
+    const removeLinkBtn = document.createElement('button');
+    removeLinkBtn.type = 'button';
+    removeLinkBtn.className = 'link-context-menu-item link-context-menu-item-danger';
+    removeLinkBtn.textContent = 'Remove link';
+    removeLinkBtn.addEventListener('click', () => {
+      this.removeLink();
+    });
+
+    menu.append(editTextBtn, editUrlBtn, removeLinkBtn);
+    document.body.appendChild(menu);
+    this.linkContextMenu = menu;
+
+    // Position the menu
+    const menuRect = menu.getBoundingClientRect();
+    const viewportWidth = window.innerWidth;
+    const viewportHeight = window.innerHeight;
+
+    let left = x;
+    let top = y;
+
+    if (x + menuRect.width > viewportWidth) {
+      left = viewportWidth - menuRect.width - 8;
+    }
+    if (y + menuRect.height > viewportHeight) {
+      top = viewportHeight - menuRect.height - 8;
+    }
+
+    menu.style.left = `${left}px`;
+    menu.style.top = `${top}px`;
+
+    // Setup dismiss handlers
+    this.linkContextMenuDismissHandler = (event: MouseEvent) => {
+      const target = event.target;
+      if (target instanceof Node && !menu.contains(target)) {
+        this.closeLinkContextMenu();
+      }
+    };
+    this.linkContextMenuKeyHandler = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') {
+        this.closeLinkContextMenu();
+      }
+    };
+
+    document.addEventListener('mousedown', this.linkContextMenuDismissHandler);
+    document.addEventListener('keydown', this.linkContextMenuKeyHandler);
+  }
+
+  private closeLinkContextMenu(): void {
+    if (this.linkContextMenuDismissHandler) {
+      document.removeEventListener('mousedown', this.linkContextMenuDismissHandler);
+      this.linkContextMenuDismissHandler = null;
+    }
+    if (this.linkContextMenuKeyHandler) {
+      document.removeEventListener('keydown', this.linkContextMenuKeyHandler);
+      this.linkContextMenuKeyHandler = null;
+    }
+    if (this.linkContextMenu) {
+      this.linkContextMenu.remove();
+      this.linkContextMenu = null;
+    }
+    this.linkContextMenuTarget = null;
+  }
+
+  private editLinkText(): void {
+    if (!this.editor || !this.linkContextMenuTarget) {
+      this.closeLinkContextMenu();
+      return;
+    }
+
+    const currentText = this.linkContextMenuTarget.textContent ?? '';
+    const newText = window.prompt('Edit link text:', currentText);
+
+    if (newText !== null && newText !== currentText && newText.trim() !== '') {
+      const href = this.linkContextMenuTarget.getAttribute('href') ?? '';
+      // Find and replace in the editor
+      const pos = this.editor.view.posAtDOM(this.linkContextMenuTarget, 0);
+      const endPos = pos + currentText.length;
+
+      this.editor
+        .chain()
+        .focus()
+        .setTextSelection({ from: pos, to: endPos })
+        .deleteSelection()
+        .insertContent(`<a href="${this.escapeHtml(href)}" class="editor-link">${this.escapeHtml(newText)}</a>`)
+        .run();
+
+      this.scheduleAutosave();
+    }
+
+    this.closeLinkContextMenu();
+  }
+
+  private editLinkUrl(): void {
+    if (!this.editor || !this.linkContextMenuTarget) {
+      this.closeLinkContextMenu();
+      return;
+    }
+
+    const currentUrl = this.linkContextMenuTarget.getAttribute('href') ?? '';
+    const newUrl = window.prompt('Edit URL:', currentUrl);
+
+    if (newUrl !== null && newUrl !== currentUrl) {
+      const text = this.linkContextMenuTarget.textContent ?? '';
+      const pos = this.editor.view.posAtDOM(this.linkContextMenuTarget, 0);
+      const endPos = pos + text.length;
+
+      this.editor
+        .chain()
+        .focus()
+        .setTextSelection({ from: pos, to: endPos })
+        .extendMarkRange('link')
+        .setLink({ href: newUrl })
+        .run();
+
+      this.scheduleAutosave();
+    }
+
+    this.closeLinkContextMenu();
+  }
+
+  private removeLink(): void {
+    if (!this.editor || !this.linkContextMenuTarget) {
+      this.closeLinkContextMenu();
+      return;
+    }
+
+    const text = this.linkContextMenuTarget.textContent ?? '';
+    const pos = this.editor.view.posAtDOM(this.linkContextMenuTarget, 0);
+    const endPos = pos + text.length;
+
+    this.editor
+      .chain()
+      .focus()
+      .setTextSelection({ from: pos, to: endPos })
+      .unsetLink()
+      .run();
+
+    this.scheduleAutosave();
+    this.closeLinkContextMenu();
+  }
+
   private async saveEdits(options: SaveEditsOptions = {}): Promise<void> {
     if (!this.currentNote || !this.editor || !this.onNoteSaveCallback) {
       return;
@@ -1179,6 +1442,32 @@ export class NoteView {
     });
   }
 
+  private async handleImageFile(file: File): Promise<void> {
+    if (!this.editor || !this.currentNote) {
+      return;
+    }
+
+    try {
+      const arrayBuffer = await file.arrayBuffer();
+      const base64 = btoa(
+        new Uint8Array(arrayBuffer).reduce((data, byte) => data + String.fromCharCode(byte), ''),
+      );
+
+      const result = await api.saveImage(base64, file.type);
+      if (!result.success || !result.relativePath) {
+        console.error('Failed to save image:', result.error);
+        return;
+      }
+
+      // Insert markdown image reference at current cursor position
+      const markdownImage = `![](${result.relativePath})`;
+      this.editor.chain().focus().insertContent(markdownImage).run();
+      this.scheduleAutosave();
+    } catch (error) {
+      console.error('Error handling image file:', error);
+    }
+  }
+
   private async saveMetadata(update: MetadataUpdate): Promise<void> {
     if (!this.currentNote || !this.onNoteMetadataSaveCallback) {
       return;
@@ -1271,6 +1560,14 @@ export class NoteView {
       return '<p></p>';
     }
 
+    // Check for standalone image line: ![alt](src)
+    const imageMatch = line.match(/^!\[([^\]]*)\]\(([^)]+)\)$/);
+    if (imageMatch) {
+      const alt = this.escapeHtml(imageMatch[1]);
+      const src = this.escapeHtml(imageMatch[2]);
+      return `<img src="${src}" alt="${alt}" class="editor-image">`;
+    }
+
     const headingMatch = line.match(/^(#{1,6})\s+\S/);
     const escapedLine = this.escapeHtml(line);
     const styledLine = this.applyInlineMarkdownStyles(escapedLine);
@@ -1308,6 +1605,10 @@ export class NoteView {
     withTokens = withTokens.replace(/(\*[^*\s][^*]*\*|_[^_\s][^_]*_)/g, (match) =>
       toToken(`<em>${match}</em>`),
     );
+    // Handle markdown links: [text](url) - note: brackets are not HTML-escaped
+    withTokens = withTokens.replace(/\[([^\]]+)\]\(([^)]+)\)/g, (_match, text: string, url: string) => {
+      return toToken(`<a href="${url}" class="editor-link">${text}</a>`);
+    });
 
     return withTokens.replace(/@@MDTOKEN(\d+)@@/g, (_, rawIndex: string) => {
       const index = Number.parseInt(rawIndex, 10);
@@ -1366,6 +1667,7 @@ export class NoteView {
     }
     this.teardownActionsMenuListeners();
     this.teardownHeadingActionControls();
+    this.closeLinkContextMenu();
     this.currentNote = null;
     this.isSaving = false;
     this.isSavingMetadata = false;
@@ -1402,6 +1704,7 @@ export class NoteView {
     }
     this.teardownActionsMenuListeners();
     this.teardownHeadingActionControls();
+    this.closeLinkContextMenu();
 
     if (this.editor) {
       this.editor.destroy();
