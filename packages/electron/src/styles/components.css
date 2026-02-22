@@ -420,6 +420,16 @@
   padding: 0.1em 0;
 }
 
+/* Editor images */
+.tiptap img.editor-image,
+.tiptap .editor-image {
+  display: block;
+  max-width: 100%;
+  height: auto;
+  margin: 1em 0;
+  border-radius: 6px;
+}
+
 /* Tag Chip */
 .tag-chip {
   display: inline-flex;
@@ -722,4 +732,43 @@
 
 .comment-btn-save:hover {
   background-color: var(--accent-hover);
+}
+
+/* Markdown Links */
+.tiptap-editor .markdown-link,
+.tiptap .markdown-link {
+  color: #0078d4;
+}
+
+/* Link Context Menu */
+.link-context-menu {
+  position: fixed;
+  z-index: 1500;
+  min-width: 150px;
+  padding: 6px;
+  border-radius: 8px;
+  border: 1px solid var(--border-color);
+  background: var(--bg-tertiary);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.34);
+}
+
+.link-context-menu-item {
+  width: 100%;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--text-secondary);
+  font-size: 12px;
+  text-align: left;
+  padding: 8px 10px;
+  cursor: pointer;
+  display: block;
+}
+
+.link-context-menu-item:hover {
+  background: var(--bg-hover);
+}
+
+.link-context-menu-item-danger:hover {
+  color: #d38f99;
 }
