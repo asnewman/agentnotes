@@ -1260,10 +1260,55 @@ export class NoteView {
       return '<p></p>';
     }
 
-    return markdown
-      .split('\n')
-      .map((line) => this.markdownLineToTipTap(line))
-      .join('');
+    const lines = markdown.split('\n');
+    const result: string[] = [];
+    let i = 0;
+
+    while (i < lines.length) {
+      const line = lines[i];
+
+      // Check for unordered list item (-, *, +)
+      const unorderedMatch = line.match(/^(\s*)([-*+])\s+(.*)$/);
+      if (unorderedMatch) {
+        const listItems: string[] = [];
+        while (i < lines.length) {
+          const currentLine = lines[i];
+          const itemMatch = currentLine.match(/^(\s*)([-*+])\s+(.*)$/);
+          if (!itemMatch) break;
+          const escapedContent = this.escapeHtml(itemMatch[3]);
+          const styledContent = this.applyInlineMarkdownStyles(escapedContent);
+          listItems.push(`<li><p>${styledContent}</p></li>`);
+          i++;
+        }
+        result.push(`<ul>${listItems.join('')}</ul>`);
+        continue;
+      }
+
+      // Check for ordered list item (1., 2., etc.)
+      const orderedMatch = line.match(/^(\s*)(\d+)\.\s+(.*)$/);
+      if (orderedMatch) {
+        const listItems: string[] = [];
+        const startNum = parseInt(orderedMatch[2], 10);
+        while (i < lines.length) {
+          const currentLine = lines[i];
+          const itemMatch = currentLine.match(/^(\s*)(\d+)\.\s+(.*)$/);
+          if (!itemMatch) break;
+          const escapedContent = this.escapeHtml(itemMatch[3]);
+          const styledContent = this.applyInlineMarkdownStyles(escapedContent);
+          listItems.push(`<li><p>${styledContent}</p></li>`);
+          i++;
+        }
+        const startAttr = startNum !== 1 ? ` start="${startNum}"` : '';
+        result.push(`<ol${startAttr}>${listItems.join('')}</ol>`);
+        continue;
+      }
+
+      // Regular line processing
+      result.push(this.markdownLineToTipTap(line));
+      i++;
+    }
+
+    return result.join('');
   }
 
   private markdownLineToTipTap(line: string): string {

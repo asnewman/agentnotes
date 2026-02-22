@@ -241,9 +241,15 @@
 
 .note-content {
   flex: 1;
-  overflow-y: auto;
+  overflow-y: scroll;
   padding: 24px 24px 46px;
   position: relative;
+  scrollbar-width: none; /* Firefox */
+  -ms-overflow-style: none; /* IE and Edge */
+}
+
+.note-content::-webkit-scrollbar {
+  display: none; /* Chrome, Safari, Opera */
 }
 
 .note-content > * {
@@ -327,6 +333,7 @@
 .tiptap {
   outline: none;
   line-height: 1.6;
+  padding-bottom: 50vh;
 }
 
 .tiptap h1 {
