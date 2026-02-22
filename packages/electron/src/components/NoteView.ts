@@ -134,7 +134,6 @@ export class NoteView {
 
     this.editor = new Editor({
       element: editorElement,
-      enableInputRules: false,
       extensions: [
         StarterKit,
         CommentHighlight.configure({
@@ -739,7 +738,7 @@ export class NoteView {
       return '';
     }
 
-    return this.editor.state.doc.textBetween(0, this.editor.state.doc.content.size, '\n', '\n');
+    return this.tipTapHtmlToMarkdown(this.editor.getHTML());
   }
 
   private handleEditorUpdate(editor: Editor): void {
@@ -753,7 +752,7 @@ export class NoteView {
 
     this.scheduleMarkdownStyling(editor);
 
-    const content = editor.state.doc.textBetween(0, editor.state.doc.content.size, '\n', '\n');
+    const content = this.tipTapHtmlToMarkdown(editor.getHTML());
     if (content === this.lastSavedContent) {
       return;
     }
@@ -806,10 +805,11 @@ export class NoteView {
       return;
     }
 
-    const content = editor.state.doc.textBetween(0, editor.state.doc.content.size, '\n', '\n');
+    const currentHtml = editor.getHTML();
+    const content = this.tipTapHtmlToMarkdown(currentHtml);
     const normalizedHtml = this.markdownToTipTap(content);
 
-    if (editor.getHTML() === normalizedHtml) {
+    if (currentHtml === normalizedHtml) {
       return;
     }
 
@@ -1362,6 +1362,208 @@ export class NoteView {
 
   private escapeHtml(value: string): string {
     return value.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+  }
+
+  private tipTapHtmlToMarkdown(html: string): string {
+    const div = document.createElement('div');
+    div.innerHTML = html;
+
+    const processInlineContent = (element: Element): string => {
+      let result = '';
+      for (const node of element.childNodes) {
+        if (node.nodeType === Node.TEXT_NODE) {
+          result += node.textContent ?? '';
+        } else if (node.nodeType === Node.ELEMENT_NODE) {
+          const el = node as Element;
+          const tagName = el.tagName.toLowerCase();
+          const inner = processInlineContent(el);
+
+          switch (tagName) {
+            case 'strong':
+              result += `**${inner}**`;
+              break;
+            case 'em':
+              result += `*${inner}*`;
+              break;
+            case 'code':
+              result += `\`${inner}\``;
+              break;
+            case 's':
+              result += `~~${inner}~~`;
+              break;
+            case 'mark':
+              result += inner;
+              break;
+            default:
+              result += inner;
+          }
+        }
+      }
+      return result;
+    };
+
+    const processNode = (node: Element, indent = ''): string[] => {
+      const lines: string[] = [];
+      const tagName = node.tagName.toLowerCase();
+
+      switch (tagName) {
+        case 'h1':
+          lines.push(`# ${processInlineContent(node)}`);
+          break;
+        case 'h2':
+          lines.push(`## ${processInlineContent(node)}`);
+          break;
+        case 'h3':
+          lines.push(`### ${processInlineContent(node)}`);
+          break;
+        case 'h4':
+          lines.push(`#### ${processInlineContent(node)}`);
+          break;
+        case 'h5':
+          lines.push(`##### ${processInlineContent(node)}`);
+          break;
+        case 'h6':
+          lines.push(`###### ${processInlineContent(node)}`);
+          break;
+        case 'p':
+          lines.push(processInlineContent(node));
+          break;
+        case 'blockquote': {
+          for (const child of node.children) {
+            const childLines = processNode(child as Element, indent);
+            for (const line of childLines) {
+              lines.push(`> ${line}`);
+            }
+          }
+          break;
+        }
+        case 'ul': {
+          for (const li of node.children) {
+            if (li.tagName.toLowerCase() === 'li') {
+              const liContent = this.processListItem(li as Element, indent);
+              lines.push(...liContent.map((line, idx) => (idx === 0 ? `${indent}- ${line}` : line)));
+            }
+          }
+          break;
+        }
+        case 'ol': {
+          let num = 1;
+          const startAttr = node.getAttribute('start');
+          if (startAttr) {
+            num = parseInt(startAttr, 10) || 1;
+          }
+          for (const li of node.children) {
+            if (li.tagName.toLowerCase() === 'li') {
+              const liContent = this.processListItem(li as Element, indent);
+              lines.push(
+                ...liContent.map((line, idx) => (idx === 0 ? `${indent}${num}. ${line}` : line)),
+              );
+              num++;
+            }
+          }
+          break;
+        }
+        case 'pre': {
+          const codeEl = node.querySelector('code');
+          const codeText = codeEl ? codeEl.textContent ?? '' : node.textContent ?? '';
+          lines.push('```');
+          lines.push(...codeText.split('\n'));
+          lines.push('```');
+          break;
+        }
+        case 'hr':
+          lines.push('---');
+          break;
+        default:
+          for (const child of node.children) {
+            lines.push(...processNode(child as Element, indent));
+          }
+      }
+
+      return lines;
+    };
+
+    const resultLines: string[] = [];
+    for (const child of div.children) {
+      resultLines.push(...processNode(child as Element));
+    }
+
+    return resultLines.join('\n');
+  }
+
+  private processListItem(li: Element, indent: string): string[] {
+    const lines: string[] = [];
+    for (const child of li.childNodes) {
+      if (child.nodeType === Node.TEXT_NODE) {
+        const text = child.textContent?.trim();
+        if (text) {
+          lines.push(text);
+        }
+      } else if (child.nodeType === Node.ELEMENT_NODE) {
+        const el = child as Element;
+        const tagName = el.tagName.toLowerCase();
+        if (tagName === 'p') {
+          lines.push(this.processInlineContentForList(el));
+        } else if (tagName === 'ul') {
+          for (const subLi of el.children) {
+            if (subLi.tagName.toLowerCase() === 'li') {
+              const subContent = this.processListItem(subLi as Element, indent + '  ');
+              lines.push(
+                ...subContent.map((line, idx) => (idx === 0 ? `${indent}  - ${line}` : line)),
+              );
+            }
+          }
+        } else if (tagName === 'ol') {
+          let num = 1;
+          for (const subLi of el.children) {
+            if (subLi.tagName.toLowerCase() === 'li') {
+              const subContent = this.processListItem(subLi as Element, indent + '  ');
+              lines.push(
+                ...subContent.map((line, idx) =>
+                  idx === 0 ? `${indent}  ${num}. ${line}` : line,
+                ),
+              );
+              num++;
+            }
+          }
+        }
+      }
+    }
+    return lines.length > 0 ? lines : [''];
+  }
+
+  private processInlineContentForList(element: Element): string {
+    let result = '';
+    for (const node of element.childNodes) {
+      if (node.nodeType === Node.TEXT_NODE) {
+        result += node.textContent ?? '';
+      } else if (node.nodeType === Node.ELEMENT_NODE) {
+        const el = node as Element;
+        const tagName = el.tagName.toLowerCase();
+        const inner = this.processInlineContentForList(el);
+
+        switch (tagName) {
+          case 'strong':
+            result += `**${inner}**`;
+            break;
+          case 'em':
+            result += `*${inner}*`;
+            break;
+          case 'code':
+            result += `\`${inner}\``;
+            break;
+          case 's':
+            result += `~~${inner}~~`;
+            break;
+          case 'mark':
+            result += inner;
+            break;
+          default:
+            result += inner;
+        }
+      }
+    }
+    return result;
   }
 
   private buildAnchor(content: string, startChar: number, endChar: number): CommentAnchor {
