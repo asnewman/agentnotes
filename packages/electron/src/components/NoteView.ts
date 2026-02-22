@@ -1408,23 +1408,18 @@ export class NoteView {
 
       switch (tagName) {
         case 'h1':
-          lines.push(`# ${processInlineContent(node)}`);
-          break;
         case 'h2':
-          lines.push(`## ${processInlineContent(node)}`);
-          break;
         case 'h3':
-          lines.push(`### ${processInlineContent(node)}`);
-          break;
         case 'h4':
-          lines.push(`#### ${processInlineContent(node)}`);
-          break;
         case 'h5':
-          lines.push(`##### ${processInlineContent(node)}`);
+        case 'h6': {
+          const level = parseInt(tagName[1], 10);
+          const prefix = '#'.repeat(level);
+          // Strip any leading # characters that might already be in the text
+          const content = processInlineContent(node).replace(/^#+\s*/, '');
+          lines.push(`${prefix} ${content}`);
           break;
-        case 'h6':
-          lines.push(`###### ${processInlineContent(node)}`);
-          break;
+        }
         case 'p':
           lines.push(processInlineContent(node));
           break;
@@ -1432,7 +1427,9 @@ export class NoteView {
           for (const child of node.children) {
             const childLines = processNode(child as Element, indent);
             for (const line of childLines) {
-              lines.push(`> ${line}`);
+              // Strip any leading > that might already be in the text
+              const cleanLine = line.replace(/^>\s*/, '');
+              lines.push(`> ${cleanLine}`);
             }
           }
           break;
@@ -1493,17 +1490,21 @@ export class NoteView {
 
   private processListItem(li: Element, indent: string): string[] {
     const lines: string[] = [];
+    // Strip leading list markers that might already be in the text
+    const stripListMarker = (text: string): string => {
+      return text.replace(/^(\s*[-*+]|\s*\d+\.)\s*/, '');
+    };
     for (const child of li.childNodes) {
       if (child.nodeType === Node.TEXT_NODE) {
         const text = child.textContent?.trim();
         if (text) {
-          lines.push(text);
+          lines.push(stripListMarker(text));
         }
       } else if (child.nodeType === Node.ELEMENT_NODE) {
         const el = child as Element;
         const tagName = el.tagName.toLowerCase();
         if (tagName === 'p') {
-          lines.push(this.processInlineContentForList(el));
+          lines.push(stripListMarker(this.processInlineContentForList(el)));
         } else if (tagName === 'ul') {
           for (const subLi of el.children) {
             if (subLi.tagName.toLowerCase() === 'li') {
