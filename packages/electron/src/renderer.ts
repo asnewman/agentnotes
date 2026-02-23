@@ -10,8 +10,10 @@ import {
   deleteDirectory,
   deleteNote,
   getDirectory,
+  getPanelPreferences,
   listNotes,
   moveNote,
+  savePanelPreferences,
   selectDirectory,
   updateNote,
   updateNoteMetadata,
@@ -205,16 +207,30 @@ function updatePanelToggleButtons(): void {
   }
 }
 
-function setNoteListVisible(visible: boolean): void {
+function setNoteListVisible(visible: boolean, savePreference = true): void {
   isNoteListVisible = visible;
   appElement?.classList.toggle('note-list-collapsed', !visible);
   updatePanelToggleButtons();
+
+  if (savePreference) {
+    void savePanelPreferences({
+      noteListVisible: isNoteListVisible,
+      commentsVisible: isCommentsVisible,
+    });
+  }
 }
 
-function setCommentsVisible(visible: boolean): void {
+function setCommentsVisible(visible: boolean, savePreference = true): void {
   isCommentsVisible = visible;
   appElement?.classList.toggle('comments-collapsed', !visible);
   updatePanelToggleButtons();
+
+  if (savePreference) {
+    void savePanelPreferences({
+      noteListVisible: isNoteListVisible,
+      commentsVisible: isCommentsVisible,
+    });
+  }
 }
 
 function initPanelToggles(): void {
@@ -228,9 +244,18 @@ function initPanelToggles(): void {
   toggleCommentsButton.addEventListener('click', () => {
     setCommentsVisible(!isCommentsVisible);
   });
+}
 
-  setNoteListVisible(true);
-  setCommentsVisible(true);
+async function loadPanelPreferences(): Promise<void> {
+  try {
+    const preferences = await getPanelPreferences();
+    setNoteListVisible(preferences.noteListVisible, false);
+    setCommentsVisible(preferences.commentsVisible, false);
+  } catch (error) {
+    console.error('Error loading panel preferences:', error);
+    setNoteListVisible(true, false);
+    setCommentsVisible(true, false);
+  }
 }
 
 function initTitleBar(): void {
@@ -569,6 +594,7 @@ async function handleSelectDirectory(): Promise<void> {
 
   updateDirectoryIndicator(selectedPath);
   clearCache();
+  await loadPanelPreferences();
   await loadNotes();
 }
 
@@ -658,12 +684,16 @@ async function init(): Promise<void> {
     if (!currentDirectory) {
       directoryOverlay.classList.remove('hidden');
       appElement.classList.add('hidden');
+      // Set default panel visibility when no directory is configured
+      setNoteListVisible(true, false);
+      setCommentsVisible(true, false);
       return;
     }
 
     directoryOverlay.classList.add('hidden');
     appElement.classList.remove('hidden');
     updateDirectoryIndicator(currentDirectory);
+    await loadPanelPreferences();
     await loadNotes();
   } catch (error) {
     console.error('Error checking directory:', error);

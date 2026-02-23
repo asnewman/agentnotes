@@ -56,7 +56,16 @@ export interface DirectoryMutationResult extends OperationResult {
   directories?: string[];
 }
 
+export interface SaveImageResult extends OperationResult {
+  relativePath?: string;
+}
+
 export type NotesListResponse = Note[] | NotesListResult;
+
+export interface PanelPreferences {
+  noteListVisible: boolean;
+  commentsVisible: boolean;
+}
 
 export interface PreloadApi {
   listNotes: () => Promise<NotesListResult>;
@@ -83,4 +92,8 @@ export interface PreloadApi {
   windowMinimize: () => void;
   windowMaximize: () => void;
   windowClose: () => void;
+  openExternal: (url: string) => void;
+  getPanelPreferences: () => Promise<PanelPreferences>;
+  savePanelPreferences: (preferences: PanelPreferences) => Promise<boolean>;
+  saveImage: (data: string, mimeType: string) => Promise<SaveImageResult>;
 }
