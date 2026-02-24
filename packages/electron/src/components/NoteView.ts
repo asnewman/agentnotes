@@ -709,8 +709,15 @@ export class NoteView {
       return null;
     }
 
-    // Find the line that contains this offset
     const text = this.editorState.text;
+
+    // If the span starts at a newline character, the visible content
+    // is on the next line, so this is not a heading hover
+    if (text[fromOffset] === '\n') {
+      return null;
+    }
+
+    // Find the line that contains this offset
     let lineStart = 0;
     const lines = text.split('\n');
     for (const line of lines) {
