@@ -1,0 +1,99 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 900 700">
+  <defs>
+    <marker id="arrowhead" markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto">
+      <polygon points="0 0, 10 3.5, 0 7" fill="#333"/>
+    </marker>
+  </defs>
+
+  <!-- Background -->
+  <rect width="900" height="700" fill="#fafafa"/>
+
+  <!-- Title -->
+  <text x="450" y="40" font-family="system-ui, sans-serif" font-size="28" font-weight="bold" text-anchor="middle" fill="#333">AgentNotes Architecture</text>
+
+  <!-- Engine Package (Blue) -->
+  <rect x="80" y="100" width="220" height="180" rx="8" fill="#dbeafe" stroke="#3b82f6" stroke-width="2"/>
+  <text x="190" y="130" font-family="system-ui, sans-serif" font-size="16" font-weight="bold" text-anchor="middle" fill="#1e40af">@agentnotes/engine</text>
+  <text x="190" y="160" font-family="system-ui, sans-serif" font-size="13" text-anchor="middle" fill="#374151">NoteStore</text>
+  <text x="190" y="182" font-family="system-ui, sans-serif" font-size="13" text-anchor="middle" fill="#374151">Comments &amp; Anchoring</text>
+  <text x="190" y="204" font-family="system-ui, sans-serif" font-size="13" text-anchor="middle" fill="#374151">Storage (MD + JSON)</text>
+  <text x="190" y="226" font-family="system-ui, sans-serif" font-size="13" text-anchor="middle" fill="#374151">Types &amp; Validation</text>
+  <text x="190" y="264" font-family="system-ui, sans-serif" font-size="11" text-anchor="middle" fill="#6b7280" font-style="italic">Core business logic</text>
+
+  <!-- Editor Package (Green) -->
+  <rect x="340" y="100" width="220" height="180" rx="8" fill="#dcfce7" stroke="#22c55e" stroke-width="2"/>
+  <text x="450" y="130" font-family="system-ui, sans-serif" font-size="16" font-weight="bold" text-anchor="middle" fill="#166534">@agentnotes/editor</text>
+  <text x="450" y="160" font-family="system-ui, sans-serif" font-size="13" text-anchor="middle" fill="#374151">Editor (main class)</text>
+  <text x="450" y="182" font-family="system-ui, sans-serif" font-size="13" text-anchor="middle" fill="#374151">TextRenderer</text>
+  <text x="450" y="204" font-family="system-ui, sans-serif" font-size="13" text-anchor="middle" fill="#374151">CursorRenderer</text>
+  <text x="450" y="226" font-family="system-ui, sans-serif" font-size="13" text-anchor="middle" fill="#374151">Decorations System</text>
+  <text x="450" y="264" font-family="system-ui, sans-serif" font-size="11" text-anchor="middle" fill="#6b7280" font-style="italic">External state model</text>
+
+  <!-- File System (Gray) -->
+  <rect x="620" y="140" width="180" height="100" rx="8" fill="#f3f4f6" stroke="#6b7280" stroke-width="2"/>
+  <text x="710" y="175" font-family="system-ui, sans-serif" font-size="14" font-weight="bold" text-anchor="middle" fill="#374151">File System</text>
+  <text x="710" y="200" font-family="system-ui, sans-serif" font-size="12" text-anchor="middle" fill="#6b7280">*.md files</text>
+  <text x="710" y="220" font-family="system-ui, sans-serif" font-size="12" text-anchor="middle" fill="#6b7280">*.md.json sidecar</text>
+
+  <!-- CLI Package (Orange) -->
+  <rect x="80" y="380" width="220" height="160" rx="8" fill="#ffedd5" stroke="#f97316" stroke-width="2"/>
+  <text x="190" y="410" font-family="system-ui, sans-serif" font-size="16" font-weight="bold" text-anchor="middle" fill="#c2410c">@agentnotes/cli</text>
+  <text x="190" y="440" font-family="system-ui, sans-serif" font-size="13" text-anchor="middle" fill="#374151">Commander Setup</text>
+  <text x="190" y="462" font-family="system-ui, sans-serif" font-size="13" text-anchor="middle" fill="#374151">Commands (add, list, edit...)</text>
+  <text x="190" y="484" font-family="system-ui, sans-serif" font-size="13" text-anchor="middle" fill="#374151">Display Formatting</text>
+  <text x="190" y="522" font-family="system-ui, sans-serif" font-size="11" text-anchor="middle" fill="#6b7280" font-style="italic">Terminal interface</text>
+
+  <!-- Electron Package (Purple) -->
+  <rect x="340" y="380" width="220" height="160" rx="8" fill="#ede9fe" stroke="#8b5cf6" stroke-width="2"/>
+  <text x="450" y="410" font-family="system-ui, sans-serif" font-size="16" font-weight="bold" text-anchor="middle" fill="#6d28d9">electron</text>
+  <text x="450" y="440" font-family="system-ui, sans-serif" font-size="13" text-anchor="middle" fill="#374151">NoteView (editor integration)</text>
+  <text x="450" y="462" font-family="system-ui, sans-serif" font-size="13" text-anchor="middle" fill="#374151">NoteList &amp; CommentsPanel</text>
+  <text x="450" y="484" font-family="system-ui, sans-serif" font-size="13" text-anchor="middle" fill="#374151">IPC &amp; Main Process</text>
+  <text x="450" y="522" font-family="system-ui, sans-serif" font-size="11" text-anchor="middle" fill="#6b7280" font-style="italic">Desktop GUI app</text>
+
+  <!-- Users -->
+  <ellipse cx="190" cy="620" rx="90" ry="35" fill="#fff" stroke="#333" stroke-width="2"/>
+  <text x="190" y="625" font-family="system-ui, sans-serif" font-size="14" text-anchor="middle" fill="#333">Terminal User</text>
+
+  <ellipse cx="450" cy="620" rx="90" ry="35" fill="#fff" stroke="#333" stroke-width="2"/>
+  <text x="450" y="625" font-family="system-ui, sans-serif" font-size="14" text-anchor="middle" fill="#333">GUI User</text>
+
+  <!-- Arrows: CLI to Engine -->
+  <line x1="190" y1="380" x2="190" y2="285" stroke="#333" stroke-width="2" marker-end="url(#arrowhead)"/>
+  <text x="205" y="335" font-family="system-ui, sans-serif" font-size="11" fill="#666">uses</text>
+
+  <!-- Arrows: Electron to Engine -->
+  <path d="M 380 380 Q 300 340 260 285" fill="none" stroke="#333" stroke-width="2" marker-end="url(#arrowhead)"/>
+  <text x="295" y="345" font-family="system-ui, sans-serif" font-size="11" fill="#666">uses</text>
+
+  <!-- Arrows: Electron to Editor -->
+  <line x1="450" y1="380" x2="450" y2="285" stroke="#333" stroke-width="2" marker-end="url(#arrowhead)"/>
+  <text x="465" y="335" font-family="system-ui, sans-serif" font-size="11" fill="#666">uses</text>
+
+  <!-- Arrows: Engine to File System -->
+  <line x1="300" y1="190" x2="615" y2="190" stroke="#333" stroke-width="2" marker-end="url(#arrowhead)"/>
+  <text x="450" y="180" font-family="system-ui, sans-serif" font-size="11" fill="#666">reads/writes</text>
+
+  <!-- Arrows: Users to Apps -->
+  <line x1="190" y1="585" x2="190" y2="545" stroke="#333" stroke-width="2" marker-end="url(#arrowhead)"/>
+  <line x1="450" y1="585" x2="450" y2="545" stroke="#333" stroke-width="2" marker-end="url(#arrowhead)"/>
+
+  <!-- Legend -->
+  <rect x="620" y="380" width="180" height="170" rx="8" fill="#fff" stroke="#e5e7eb" stroke-width="1"/>
+  <text x="710" y="405" font-family="system-ui, sans-serif" font-size="14" font-weight="bold" text-anchor="middle" fill="#333">Legend</text>
+
+  <rect x="635" y="420" width="16" height="16" rx="3" fill="#dbeafe" stroke="#3b82f6" stroke-width="1"/>
+  <text x="660" y="433" font-family="system-ui, sans-serif" font-size="12" fill="#374151">Core Logic</text>
+
+  <rect x="635" y="445" width="16" height="16" rx="3" fill="#dcfce7" stroke="#22c55e" stroke-width="1"/>
+  <text x="660" y="458" font-family="system-ui, sans-serif" font-size="12" fill="#374151">Text Editor</text>
+
+  <rect x="635" y="470" width="16" height="16" rx="3" fill="#ffedd5" stroke="#f97316" stroke-width="1"/>
+  <text x="660" y="483" font-family="system-ui, sans-serif" font-size="12" fill="#374151">CLI Interface</text>
+
+  <rect x="635" y="495" width="16" height="16" rx="3" fill="#ede9fe" stroke="#8b5cf6" stroke-width="1"/>
+  <text x="660" y="508" font-family="system-ui, sans-serif" font-size="12" fill="#374151">GUI App</text>
+
+  <rect x="635" y="520" width="16" height="16" rx="3" fill="#f3f4f6" stroke="#6b7280" stroke-width="1"/>
+  <text x="660" y="533" font-family="system-ui, sans-serif" font-size="12" fill="#374151">Storage</text>
+</svg>

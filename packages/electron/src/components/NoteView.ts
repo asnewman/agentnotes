@@ -1,13 +1,7 @@
-import { Editor } from '@tiptap/core';
-import Highlight from '@tiptap/extension-highlight';
-import StarterKit from '@tiptap/starter-kit';
+import { Editor, EditorState, Selection, Decoration } from '@agentnotes/editor';
 import { buildAnchorFromRange, getAllHighlightRanges, toTitleCase } from '../lib/browser-utils';
 import type { CommentAnchor, Note } from '../types';
 import { createTagChip } from './TagChip';
-
-const CommentHighlight = Highlight.extend({
-  inclusive: false,
-});
 
 interface CurrentSelection {
   anchor: CommentAnchor;
@@ -31,6 +25,7 @@ export class NoteView {
   private headerContainer: HTMLElement;
   private contentContainer: HTMLElement;
   private editor: Editor | null;
+  private editorState: EditorState;
   private currentNote: Note | null;
   private tooltip: HTMLDivElement | null;
   private onCommentCreateCallback: CommentCreateHandler | null;
@@ -45,7 +40,6 @@ export class NoteView {
   private pendingMetadataUpdate: MetadataUpdate | null;
   private lastSavedContent: string;
   private isApplyingContent: boolean;
-  private markdownStylingTimer: number | null;
   private contentBackgroundMouseHandler: ((event: MouseEvent) => void) | null;
   private actionsMenuDismissHandler: ((event: MouseEvent) => void) | null;
   private actionsMenuKeyHandler: ((event: KeyboardEvent) => void) | null;
@@ -65,6 +59,11 @@ export class NoteView {
     this.headerContainer = headerContainer;
     this.contentContainer = contentContainer;
     this.editor = null;
+    this.editorState = {
+      text: '',
+      selection: { anchor: 0, head: 0 },
+      decorations: [],
+    };
     this.currentNote = null;
     this.tooltip = null;
     this.onCommentCreateCallback = null;
@@ -79,14 +78,13 @@ export class NoteView {
     this.pendingMetadataUpdate = null;
     this.lastSavedContent = '';
     this.isApplyingContent = false;
-    this.markdownStylingTimer = null;
     this.contentBackgroundMouseHandler = (event: MouseEvent) => {
       if (event.button !== 0 || !this.editor || event.target !== this.contentContainer) {
         return;
       }
 
       event.preventDefault();
-      this.editor.chain().focus('end').run();
+      this.editor.focus();
     };
     this.contentContainer.addEventListener('mousedown', this.contentBackgroundMouseHandler);
     this.actionsMenuDismissHandler = null;
@@ -128,35 +126,31 @@ export class NoteView {
     this.teardownHeadingActionControls();
     this.contentContainer.innerHTML = '';
 
-    const editorElement = document.createElement('div');
-    editorElement.className = 'tiptap-editor';
-    this.contentContainer.appendChild(editorElement);
+    const editorWrapper = document.createElement('div');
+    editorWrapper.className = 'agentnotes-editor-container';
+    this.contentContainer.appendChild(editorWrapper);
 
-    this.editor = new Editor({
-      element: editorElement,
-      enableInputRules: false,
-      extensions: [
-        StarterKit,
-        CommentHighlight.configure({
-          multicolor: false,
-          HTMLAttributes: {
-            class: 'highlighted-comment',
-          },
-        }),
-      ],
-      content: '',
-      editable: true,
-      onSelectionUpdate: ({ editor }: { editor: Editor }) => {
-        this.handleSelectionUpdate(editor);
+    this.editor = new Editor(
+      editorWrapper,
+      {
+        onInsert: (position: number, text: string) => {
+          this.handleInsert(position, text);
+        },
+        onDelete: (from: number, to: number) => {
+          this.handleDelete(from, to);
+        },
+        onSelectionChange: (selection: Selection) => {
+          this.handleSelectionChange(selection);
+        },
       },
-      onUpdate: ({ editor }: { editor: Editor }) => {
-        this.handleEditorUpdate(editor);
-      },
-    });
+      {
+        placeholder: 'Start typing...',
+      }
+    );
 
     this.ensureHeadingActionControls();
 
-    editorElement.addEventListener('keydown', (event) => {
+    this.editor.getElement().addEventListener('keydown', (event) => {
       const isSaveShortcut = (event.metaKey || event.ctrlKey) && event.key.toLowerCase() === 's';
 
       if (!isSaveShortcut) {
@@ -175,33 +169,287 @@ export class NoteView {
     });
   }
 
-  private handleSelectionUpdate(editor: Editor): void {
-    const { from, to } = editor.state.selection;
+  private handleInsert(position: number, text: string): void {
+    if (this.isApplyingContent || !this.editor) {
+      return;
+    }
+
+    // Update text state
+    const before = this.editorState.text.slice(0, position);
+    const after = this.editorState.text.slice(position);
+    this.editorState.text = before + text + after;
+
+    // Update selection to after inserted text
+    const newPos = position + text.length;
+    this.editorState.selection = { anchor: newPos, head: newPos };
+
+    // Adjust decorations
+    this.editorState.decorations = this.adjustDecorationsForInsert(
+      this.editorState.decorations,
+      position,
+      text.length
+    );
+
+    // Update decorations from markdown parsing
+    this.updateDecorations();
+
+    // Re-render
+    this.editor.render(this.editorState);
+
+    // Hide heading action button when content changes
+    if (!this.isHeadingMenuOpen) {
+      this.hideHeadingActionButton();
+    }
+
+    // Schedule autosave
+    this.scheduleAutosave();
+  }
+
+  private handleDelete(from: number, to: number): void {
+    if (this.isApplyingContent || !this.editor) {
+      return;
+    }
+
+    // Update text state
+    const before = this.editorState.text.slice(0, from);
+    const after = this.editorState.text.slice(to);
+    this.editorState.text = before + after;
+
+    // Update selection to deletion point
+    this.editorState.selection = { anchor: from, head: from };
+
+    // Adjust decorations
+    this.editorState.decorations = this.adjustDecorationsForDelete(
+      this.editorState.decorations,
+      from,
+      to
+    );
+
+    // Update decorations from markdown parsing
+    this.updateDecorations();
+
+    // Re-render
+    this.editor.render(this.editorState);
+
+    // Hide heading action button when content changes
+    if (!this.isHeadingMenuOpen) {
+      this.hideHeadingActionButton();
+    }
+
+    // Schedule autosave
+    this.scheduleAutosave();
+  }
+
+  private handleSelectionChange(selection: Selection): void {
+    if (this.isApplyingContent || !this.editor) {
+      return;
+    }
+
+    this.editorState.selection = selection;
+    this.editor.render(this.editorState);
+    this.handleSelectionUpdate();
+  }
+
+  private updateDecorations(): void {
+    // Combine markdown decorations with comment highlight decorations
+    const markdownDecorations = this.parseMarkdownDecorations(this.editorState.text);
+    const commentDecorations = this.currentNote
+      ? this.getCommentDecorations(this.currentNote)
+      : [];
+    this.editorState.decorations = [...markdownDecorations, ...commentDecorations];
+  }
+
+  private parseMarkdownDecorations(text: string): Decoration[] {
+    const decorations: Decoration[] = [];
+    const lines = text.split('\n');
+    let offset = 0;
+
+    for (const line of lines) {
+      // Headings
+      const headingMatch = line.match(/^(#{1,6})\s+/);
+      if (headingMatch) {
+        const level = headingMatch[1].length;
+        const sizes: Record<number, number> = { 1: 32, 2: 24, 3: 20, 4: 18, 5: 16, 6: 14 };
+        decorations.push({
+          from: offset,
+          to: offset + line.length,
+          type: 'fontSize',
+          attributes: { size: sizes[level] ?? 16 },
+        });
+      }
+
+      // Bold (**text** or __text__)
+      const boldRegex = /(\*\*|__)([^*_]+)\1/g;
+      let match;
+      while ((match = boldRegex.exec(line)) !== null) {
+        decorations.push({
+          from: offset + match.index,
+          to: offset + match.index + match[0].length,
+          type: 'bold',
+        });
+      }
+
+      // Italic (*text* or _text_)
+      const italicRegex = /(?<!\*|\w)(\*|_)(?!\1)([^*_\n]+)(?<!\*|\w)\1(?!\1)/g;
+      while ((match = italicRegex.exec(line)) !== null) {
+        decorations.push({
+          from: offset + match.index,
+          to: offset + match.index + match[0].length,
+          type: 'italic',
+        });
+      }
+
+      // Code (`text`)
+      const codeRegex = /`([^`\n]+)`/g;
+      while ((match = codeRegex.exec(line)) !== null) {
+        decorations.push({
+          from: offset + match.index,
+          to: offset + match.index + match[0].length,
+          type: 'highlight',
+          attributes: { color: 'rgba(128, 128, 128, 0.3)' },
+        });
+      }
+
+      // Strikethrough (~~text~~)
+      const strikeRegex = /~~([^~\n]+)~~/g;
+      while ((match = strikeRegex.exec(line)) !== null) {
+        decorations.push({
+          from: offset + match.index,
+          to: offset + match.index + match[0].length,
+          type: 'underline',
+          attributes: { strikethrough: true },
+        });
+      }
+
+      offset += line.length + 1; // +1 for newline
+    }
+
+    return decorations;
+  }
+
+  private getCommentDecorations(note: Note): Decoration[] {
+    if (note.comments.length === 0) {
+      return [];
+    }
+
+    const ranges = getAllHighlightRanges(note.content, note.comments);
+    return ranges.map((range) => ({
+      from: range.from,
+      to: range.to,
+      type: 'highlight' as const,
+      attributes: { color: 'rgba(255, 255, 0, 0.3)' },
+    }));
+  }
+
+  private adjustDecorationsForInsert(
+    decorations: Decoration[],
+    position: number,
+    length: number
+  ): Decoration[] {
+    return decorations
+      .map((dec) => {
+        // Decoration is entirely before insertion - no change
+        if (dec.to <= position) {
+          return dec;
+        }
+
+        // Decoration is entirely after insertion - shift
+        if (dec.from >= position) {
+          return {
+            ...dec,
+            from: dec.from + length,
+            to: dec.to + length,
+          };
+        }
+
+        // Decoration spans the insertion point - extend
+        return {
+          ...dec,
+          to: dec.to + length,
+        };
+      })
+      .filter((dec) => dec.from < dec.to);
+  }
+
+  private adjustDecorationsForDelete(
+    decorations: Decoration[],
+    from: number,
+    to: number
+  ): Decoration[] {
+    const length = to - from;
+
+    return decorations
+      .map((dec) => {
+        // Decoration is entirely before deletion - no change
+        if (dec.to <= from) {
+          return dec;
+        }
+
+        // Decoration is entirely after deletion - shift
+        if (dec.from >= to) {
+          return {
+            ...dec,
+            from: dec.from - length,
+            to: dec.to - length,
+          };
+        }
+
+        // Decoration is entirely within deletion - remove
+        if (dec.from >= from && dec.to <= to) {
+          return null;
+        }
+
+        // Decoration overlaps deletion start
+        if (dec.from < from && dec.to <= to) {
+          return {
+            ...dec,
+            to: from,
+          };
+        }
+
+        // Decoration overlaps deletion end
+        if (dec.from >= from && dec.to > to) {
+          return {
+            ...dec,
+            from: from,
+            to: dec.to - length,
+          };
+        }
+
+        // Decoration spans the entire deletion
+        return {
+          ...dec,
+          to: dec.to - length,
+        };
+      })
+      .filter((dec): dec is Decoration => dec !== null && dec.from < dec.to);
+  }
+
+  private handleSelectionUpdate(): void {
+    const { anchor, head } = this.editorState.selection;
+    const from = Math.min(anchor, head);
+    const to = Math.max(anchor, head);
 
     if (from === to || !this.currentNote) {
       this.hideSelectionTooltip();
       return;
     }
 
-    const selectedText = editor.state.doc.textBetween(from, to, '\n', '\n');
+    const content = this.editorState.text;
+    const selectedText = content.slice(from, to);
     if (!selectedText || selectedText.trim().length === 0) {
       this.hideSelectionTooltip();
       return;
     }
 
-    const content = this.getEditorText();
-    const prefixText = editor.state.doc.textBetween(0, from, '\n', '\n');
-    const startChar = prefixText.length;
-    const endChar = startChar + selectedText.length;
-
-    if (endChar > content.length) {
+    if (to > content.length) {
       this.hideSelectionTooltip();
       return;
     }
 
     try {
       this.currentSelection = {
-        anchor: this.buildAnchor(content, startChar, endChar),
+        anchor: this.buildAnchor(content, from, to),
         text: selectedText.trim(),
       };
     } catch {
@@ -450,16 +698,34 @@ export class NoteView {
       return null;
     }
 
-    const headingElement = target.closest('h1, h2, h3, h4, h5, h6');
-    if (!(headingElement instanceof HTMLElement)) {
+    // Find the span with data-from attribute
+    const spanElement = target.closest('span[data-from]') as HTMLElement | null;
+    if (!spanElement || !this.contentContainer.contains(spanElement)) {
       return null;
     }
 
-    if (!this.contentContainer.contains(headingElement)) {
+    const fromOffset = Number.parseInt(spanElement.dataset.from ?? '', 10);
+    if (!Number.isFinite(fromOffset)) {
       return null;
     }
 
-    return headingElement;
+    // Find the line that contains this offset
+    const text = this.editorState.text;
+    let lineStart = 0;
+    const lines = text.split('\n');
+    for (const line of lines) {
+      const lineEnd = lineStart + line.length;
+      if (fromOffset >= lineStart && fromOffset <= lineEnd) {
+        // Check if this line is a heading
+        if (line.match(/^#{1,6}\s+/)) {
+          return spanElement;
+        }
+        return null;
+      }
+      lineStart = lineEnd + 1; // +1 for newline
+    }
+
+    return null;
   }
 
   private showHeadingActionButton(): void {
@@ -613,21 +879,26 @@ export class NoteView {
   }
 
   private getHeadingLineIndex(headingElement: HTMLElement): number | null {
-    if (!this.editor) {
+    // Get the data-from attribute from the span
+    const fromOffset = Number.parseInt(headingElement.dataset.from ?? '', 10);
+    if (!Number.isFinite(fromOffset)) {
       return null;
     }
 
-    try {
-      const headingPosition = this.editor.view.posAtDOM(headingElement, 0);
-      const contentBeforeHeading = this.editor.state.doc.textBetween(0, headingPosition, '\n', '\n');
-      if (contentBeforeHeading.length === 0) {
-        return 0;
+    // Find which line this offset belongs to
+    const text = this.editorState.text;
+    let lineStart = 0;
+    const lines = text.split('\n');
+    for (let lineIndex = 0; lineIndex < lines.length; lineIndex++) {
+      const line = lines[lineIndex];
+      const lineEnd = lineStart + line.length;
+      if (fromOffset >= lineStart && fromOffset <= lineEnd) {
+        return lineIndex;
       }
-
-      return contentBeforeHeading.split('\n').length - 1;
-    } catch {
-      return null;
+      lineStart = lineEnd + 1; // +1 for newline
     }
+
+    return null;
   }
 
   private formatHeadingToTitleCase(): void {
@@ -666,7 +937,11 @@ export class NoteView {
     lines[lineIndex] = `${headingMatch[1]}${titleCasedHeading}${trailingWhitespace}`;
     const nextContent = lines.join('\n');
 
-    this.setEditorContentPreservingSelection(this.editor, this.markdownToTipTap(nextContent));
+    // Update editor state and re-render
+    this.editorState.text = nextContent;
+    this.updateDecorations();
+    this.editor.render(this.editorState);
+
     if (this.currentNote) {
       this.currentNote = {
         ...this.currentNote,
@@ -735,30 +1010,7 @@ export class NoteView {
   }
 
   private getEditorText(): string {
-    if (!this.editor) {
-      return '';
-    }
-
-    return this.editor.state.doc.textBetween(0, this.editor.state.doc.content.size, '\n', '\n');
-  }
-
-  private handleEditorUpdate(editor: Editor): void {
-    if (!this.currentNote || this.isApplyingContent) {
-      return;
-    }
-
-    if (!this.isHeadingMenuOpen) {
-      this.hideHeadingActionButton();
-    }
-
-    this.scheduleMarkdownStyling(editor);
-
-    const content = editor.state.doc.textBetween(0, editor.state.doc.content.size, '\n', '\n');
-    if (content === this.lastSavedContent) {
-      return;
-    }
-
-    this.scheduleAutosave();
+    return this.editorState.text;
   }
 
   private scheduleAutosave(delayMs = 200): void {
@@ -790,90 +1042,6 @@ export class NoteView {
     }
   }
 
-  private scheduleMarkdownStyling(editor: Editor, delayMs = 120): void {
-    if (this.markdownStylingTimer !== null) {
-      window.clearTimeout(this.markdownStylingTimer);
-    }
-
-    this.markdownStylingTimer = window.setTimeout(() => {
-      this.markdownStylingTimer = null;
-      this.applyMarkdownStyling(editor);
-    }, delayMs);
-  }
-
-  private applyMarkdownStyling(editor: Editor): void {
-    if (!this.currentNote || this.isApplyingContent) {
-      return;
-    }
-
-    const content = editor.state.doc.textBetween(0, editor.state.doc.content.size, '\n', '\n');
-    const normalizedHtml = this.markdownToTipTap(content);
-
-    if (editor.getHTML() === normalizedHtml) {
-      return;
-    }
-
-    const anchorOffset = editor.state.doc.textBetween(
-      0,
-      editor.state.selection.anchor,
-      '\n',
-      '\n',
-    ).length;
-    const headOffset = editor.state.doc.textBetween(0, editor.state.selection.head, '\n', '\n').length;
-
-    this.setEditorContentPreservingSelection(editor, normalizedHtml, anchorOffset, headOffset);
-  }
-
-  private setEditorContentPreservingSelection(
-    editor: Editor,
-    normalizedHtml: string,
-    anchorOffsetOverride?: number,
-    headOffsetOverride?: number,
-  ): void {
-    const anchorOffset =
-      anchorOffsetOverride ??
-      editor.state.doc.textBetween(0, editor.state.selection.anchor, '\n', '\n').length;
-    const headOffset =
-      headOffsetOverride ??
-      editor.state.doc.textBetween(0, editor.state.selection.head, '\n', '\n').length;
-
-    this.isApplyingContent = true;
-    try {
-      editor.commands.setContent(normalizedHtml, false, { preserveWhitespace: 'full' });
-
-      const anchorPosition = this.plainTextOffsetToDocPosition(editor, anchorOffset);
-      const headPosition = this.plainTextOffsetToDocPosition(editor, headOffset);
-
-      const from = Math.min(anchorPosition, headPosition);
-      const to = Math.max(anchorPosition, headPosition);
-      editor.commands.setTextSelection({ from, to });
-    } catch (error) {
-      console.debug('Could not update editor content:', error);
-    } finally {
-      this.isApplyingContent = false;
-    }
-  }
-
-  private plainTextOffsetToDocPosition(editor: Editor, offset: number): number {
-    const { doc } = editor.state;
-    const totalText = doc.textBetween(0, doc.content.size, '\n', '\n');
-    const clampedOffset = Math.max(0, Math.min(offset, totalText.length));
-
-    let low = 0;
-    let high = doc.content.size;
-    while (low < high) {
-      const mid = Math.floor((low + high) / 2);
-      const midLength = doc.textBetween(0, mid, '\n', '\n').length;
-      if (midLength < clampedOffset) {
-        low = mid + 1;
-      } else {
-        high = mid;
-      }
-    }
-
-    return Math.max(1, Math.min(doc.content.size - 1, low));
-  }
-
   render(note: Note | null): void {
     if (!note) {
       this.renderEmpty();
@@ -883,10 +1051,6 @@ export class NoteView {
     const isDifferentNote = this.currentNote?.id !== note.id;
     if (isDifferentNote) {
       this.clearAutosaveTimer();
-      if (this.markdownStylingTimer !== null) {
-        window.clearTimeout(this.markdownStylingTimer);
-        this.markdownStylingTimer = null;
-      }
       this.isSaving = false;
       this.isSavingMetadata = false;
       this.pendingAutosave = false;
@@ -1242,116 +1406,23 @@ export class NoteView {
       return;
     }
 
-    const content = this.markdownToTipTap(note.content);
     this.closeHeadingActionMenu();
     this.hideHeadingActionButton();
     this.isApplyingContent = true;
     try {
-      this.editor.commands.setContent(content, false, { preserveWhitespace: 'full' });
+      // Set text and generate decorations
+      this.editorState.text = note.content;
+      this.editorState.selection = { anchor: 0, head: 0 };
+      this.updateDecorations();
+      this.editor.render(this.editorState);
     } finally {
       this.isApplyingContent = false;
     }
-    this.editor.setEditable(true);
-    this.applyHighlights(note);
-  }
-
-  private markdownToTipTap(markdown: string): string {
-    if (!markdown) {
-      return '<p></p>';
-    }
-
-    return markdown
-      .split('\n')
-      .map((line) => this.markdownLineToTipTap(line))
-      .join('');
-  }
-
-  private markdownLineToTipTap(line: string): string {
-    if (line.trim().length === 0) {
-      return '<p></p>';
-    }
-
-    const headingMatch = line.match(/^(#{1,6})\s+\S/);
-    const escapedLine = this.escapeHtml(line);
-    const styledLine = this.applyInlineMarkdownStyles(escapedLine);
-
-    if (headingMatch) {
-      const level = headingMatch[1].length;
-      return `<h${level}>${styledLine}</h${level}>`;
-    }
-
-    const blockQuoteMatch = line.match(/^>\s?/);
-    if (blockQuoteMatch) {
-      return `<blockquote><p>${styledLine}</p></blockquote>`;
-    }
-
-    return `<p>${styledLine}</p>`;
-  }
-
-  private applyInlineMarkdownStyles(escapedLine: string): string {
-    if (!escapedLine) {
-      return escapedLine;
-    }
-
-    const styledSegments: string[] = [];
-    const toToken = (html: string): string => {
-      const token = `@@MDTOKEN${styledSegments.length}@@`;
-      styledSegments.push(html);
-      return token;
-    };
-
-    let withTokens = escapedLine.replace(/`[^`]+`/g, (match) => toToken(`<code>${match}</code>`));
-    withTokens = withTokens.replace(/(\*\*[^*]+\*\*|__[^_]+__)/g, (match) =>
-      toToken(`<strong>${match}</strong>`),
-    );
-    withTokens = withTokens.replace(/(~~[^~]+~~)/g, (match) => toToken(`<s>${match}</s>`));
-    withTokens = withTokens.replace(/(\*[^*\s][^*]*\*|_[^_\s][^_]*_)/g, (match) =>
-      toToken(`<em>${match}</em>`),
-    );
-
-    return withTokens.replace(/@@MDTOKEN(\d+)@@/g, (_, rawIndex: string) => {
-      const index = Number.parseInt(rawIndex, 10);
-      return Number.isFinite(index) ? (styledSegments[index] ?? '') : '';
-    });
-  }
-
-  private escapeHtml(value: string): string {
-    return value.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
   }
 
   private buildAnchor(content: string, startChar: number, endChar: number): CommentAnchor {
     const rev = this.currentNote?.commentRev ?? 0;
     return buildAnchorFromRange(content, startChar, endChar, rev);
-  }
-
-  private applyHighlights(note: Note): void {
-    if (!this.editor || note.comments.length === 0) {
-      return;
-    }
-
-    const selection = this.editor.state.selection;
-    const ranges = getAllHighlightRanges(note.content, note.comments);
-    if (ranges.length === 0) {
-      return;
-    }
-
-    for (const range of ranges) {
-      try {
-        this.editor
-          .chain()
-          .setTextSelection({ from: range.from + 1, to: range.to + 1 })
-          .setHighlight()
-          .run();
-      } catch {
-        console.debug('Could not apply highlight to range:', range);
-      }
-    }
-
-    try {
-      this.editor.commands.setTextSelection({ from: selection.from, to: selection.to });
-    } catch {
-      console.debug('Could not restore selection after applying highlights');
-    }
   }
 
   clear(): void {
@@ -1360,10 +1431,6 @@ export class NoteView {
 
   private renderEmpty(): void {
     this.clearAutosaveTimer();
-    if (this.markdownStylingTimer !== null) {
-      window.clearTimeout(this.markdownStylingTimer);
-      this.markdownStylingTimer = null;
-    }
     this.teardownActionsMenuListeners();
     this.teardownHeadingActionControls();
     this.currentNote = null;
@@ -1396,10 +1463,6 @@ export class NoteView {
 
   destroy(): void {
     this.clearAutosaveTimer();
-    if (this.markdownStylingTimer !== null) {
-      window.clearTimeout(this.markdownStylingTimer);
-      this.markdownStylingTimer = null;
-    }
     this.teardownActionsMenuListeners();
     this.teardownHeadingActionControls();
 

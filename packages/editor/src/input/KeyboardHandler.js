@@ -1,0 +1,349 @@
+const CLASS_PREFIX = 'agentnotes-editor';
+/**
+ * Handles keyboard input via a hidden textarea.
+ */
+export class KeyboardHandler {
+    constructor(container, callbacks, getState) {
+        /**
+         * Handles text input from the hidden textarea.
+         */
+        this.handleInput = (event) => {
+            const inputEvent = event;
+            const text = this.hiddenInput.value;
+            if (text && !this.isComposing) {
+                const state = this.getState();
+                const { anchor, head } = state.selection;
+                // If there's a selection, delete it first
+                if (anchor !== head) {
+                    const from = Math.min(anchor, head);
+                    const to = Math.max(anchor, head);
+                    this.callbacks.onDelete?.(from, to);
+                    // Insert at the start of the deleted range
+                    this.callbacks.onInsert?.(from, text);
+                }
+                else {
+                    this.callbacks.onInsert?.(anchor, text);
+                }
+            }
+            // Clear the input
+            this.hiddenInput.value = '';
+        };
+        this.isComposing = false;
+        this.handleCompositionStart = () => {
+            this.isComposing = true;
+        };
+        this.handleCompositionEnd = (event) => {
+            this.isComposing = false;
+            const text = event.data;
+            if (text) {
+                const state = this.getState();
+                const { anchor, head } = state.selection;
+                // If there's a selection, delete it first
+                if (anchor !== head) {
+                    const from = Math.min(anchor, head);
+                    const to = Math.max(anchor, head);
+                    this.callbacks.onDelete?.(from, to);
+                    this.callbacks.onInsert?.(from, text);
+                }
+                else {
+                    this.callbacks.onInsert?.(anchor, text);
+                }
+            }
+            this.hiddenInput.value = '';
+        };
+        /**
+         * Handles special key events.
+         */
+        this.handleKeyDown = (event) => {
+            const state = this.getState();
+            const { anchor, head } = state.selection;
+            const textLength = state.text.length;
+            const isMac = navigator.platform.includes('Mac');
+            const modKey = isMac ? event.metaKey : event.ctrlKey;
+            switch (event.key) {
+                case 'Backspace':
+                    event.preventDefault();
+                    this.handleBackspace(state);
+                    break;
+                case 'Delete':
+                    event.preventDefault();
+                    this.handleDelete(state);
+                    break;
+                case 'ArrowLeft':
+                    event.preventDefault();
+                    this.handleArrowLeft(state, event.shiftKey, modKey);
+                    break;
+                case 'ArrowRight':
+                    event.preventDefault();
+                    this.handleArrowRight(state, event.shiftKey, modKey);
+                    break;
+                case 'ArrowUp':
+                    event.preventDefault();
+                    // TODO: Implement line-based navigation
+                    this.callbacks.onSelectionChange?.({ anchor: 0, head: 0 });
+                    break;
+                case 'ArrowDown':
+                    event.preventDefault();
+                    // TODO: Implement line-based navigation
+                    this.callbacks.onSelectionChange?.({ anchor: textLength, head: textLength });
+                    break;
+                case 'Home':
+                    event.preventDefault();
+                    if (event.shiftKey) {
+                        this.callbacks.onSelectionChange?.({ anchor, head: 0 });
+                    }
+                    else {
+                        this.callbacks.onSelectionChange?.({ anchor: 0, head: 0 });
+                    }
+                    break;
+                case 'End':
+                    event.preventDefault();
+                    if (event.shiftKey) {
+                        this.callbacks.onSelectionChange?.({ anchor, head: textLength });
+                    }
+                    else {
+                        this.callbacks.onSelectionChange?.({ anchor: textLength, head: textLength });
+                    }
+                    break;
+                case 'a':
+                    if (modKey) {
+                        event.preventDefault();
+                        this.callbacks.onSelectionChange?.({ anchor: 0, head: textLength });
+                    }
+                    break;
+                case 'Enter':
+                    event.preventDefault();
+                    if (anchor !== head) {
+                        const from = Math.min(anchor, head);
+                        const to = Math.max(anchor, head);
+                        this.callbacks.onDelete?.(from, to);
+                        this.callbacks.onInsert?.(from, '\n');
+                    }
+                    else {
+                        this.callbacks.onInsert?.(anchor, '\n');
+                    }
+                    break;
+                case 'Tab':
+                    event.preventDefault();
+                    if (anchor !== head) {
+                        const from = Math.min(anchor, head);
+                        const to = Math.max(anchor, head);
+                        this.callbacks.onDelete?.(from, to);
+                        this.callbacks.onInsert?.(from, '\t');
+                    }
+                    else {
+                        this.callbacks.onInsert?.(anchor, '\t');
+                    }
+                    break;
+            }
+        };
+        this.container = container;
+        this.callbacks = callbacks;
+        this.getState = getState;
+        this.hiddenInput = document.createElement('textarea');
+        this.hiddenInput.className = `${CLASS_PREFIX}-hidden-input`;
+        this.hiddenInput.style.cssText = `
+      position: absolute;
+      left: -9999px;
+      top: 0;
+      width: 1px;
+      height: 1px;
+      opacity: 0;
+      pointer-events: none;
+      resize: none;
+      border: none;
+      padding: 0;
+      margin: 0;
+      overflow: hidden;
+      white-space: pre;
+      font: inherit;
+    `;
+        this.hiddenInput.setAttribute('autocomplete', 'off');
+        this.hiddenInput.setAttribute('autocorrect', 'off');
+        this.hiddenInput.setAttribute('autocapitalize', 'off');
+        this.hiddenInput.setAttribute('spellcheck', 'false');
+        this.hiddenInput.setAttribute('tabindex', '-1');
+        this.container.appendChild(this.hiddenInput);
+        this.bindEvents();
+    }
+    /**
+     * Binds input and keyboard events.
+     */
+    bindEvents() {
+        this.hiddenInput.addEventListener('input', this.handleInput);
+        this.hiddenInput.addEventListener('keydown', this.handleKeyDown);
+        this.hiddenInput.addEventListener('compositionstart', this.handleCompositionStart);
+        this.hiddenInput.addEventListener('compositionend', this.handleCompositionEnd);
+    }
+    /**
+     * Handles backspace key.
+     */
+    handleBackspace(state) {
+        const { anchor, head } = state.selection;
+        if (anchor !== head) {
+            const from = Math.min(anchor, head);
+            const to = Math.max(anchor, head);
+            this.callbacks.onDelete?.(from, to);
+        }
+        else if (anchor > 0) {
+            this.callbacks.onDelete?.(anchor - 1, anchor);
+        }
+    }
+    /**
+     * Handles delete key.
+     */
+    handleDelete(state) {
+        const { anchor, head } = state.selection;
+        if (anchor !== head) {
+            const from = Math.min(anchor, head);
+            const to = Math.max(anchor, head);
+            this.callbacks.onDelete?.(from, to);
+        }
+        else if (anchor < state.text.length) {
+            this.callbacks.onDelete?.(anchor, anchor + 1);
+        }
+    }
+    /**
+     * Handles left arrow key.
+     */
+    handleArrowLeft(state, shift, mod) {
+        const { anchor, head } = state.selection;
+        if (mod) {
+            // Move to start of word or line
+            const newPos = this.findWordBoundaryLeft(state.text, head);
+            if (shift) {
+                this.callbacks.onSelectionChange?.({ anchor, head: newPos });
+            }
+            else {
+                this.callbacks.onSelectionChange?.({ anchor: newPos, head: newPos });
+            }
+        }
+        else if (shift) {
+            // Extend selection left
+            const newHead = Math.max(0, head - 1);
+            this.callbacks.onSelectionChange?.({ anchor, head: newHead });
+        }
+        else {
+            // Move cursor left (or collapse selection to left)
+            if (anchor !== head) {
+                const newPos = Math.min(anchor, head);
+                this.callbacks.onSelectionChange?.({ anchor: newPos, head: newPos });
+            }
+            else {
+                const newPos = Math.max(0, anchor - 1);
+                this.callbacks.onSelectionChange?.({ anchor: newPos, head: newPos });
+            }
+        }
+    }
+    /**
+     * Handles right arrow key.
+     */
+    handleArrowRight(state, shift, mod) {
+        const { anchor, head } = state.selection;
+        const textLength = state.text.length;
+        if (mod) {
+            // Move to end of word or line
+            const newPos = this.findWordBoundaryRight(state.text, head);
+            if (shift) {
+                this.callbacks.onSelectionChange?.({ anchor, head: newPos });
+            }
+            else {
+                this.callbacks.onSelectionChange?.({ anchor: newPos, head: newPos });
+            }
+        }
+        else if (shift) {
+            // Extend selection right
+            const newHead = Math.min(textLength, head + 1);
+            this.callbacks.onSelectionChange?.({ anchor, head: newHead });
+        }
+        else {
+            // Move cursor right (or collapse selection to right)
+            if (anchor !== head) {
+                const newPos = Math.max(anchor, head);
+                this.callbacks.onSelectionChange?.({ anchor: newPos, head: newPos });
+            }
+            else {
+                const newPos = Math.min(textLength, anchor + 1);
+                this.callbacks.onSelectionChange?.({ anchor: newPos, head: newPos });
+            }
+        }
+    }
+    /**
+     * Finds the word boundary to the left of a position.
+     */
+    findWordBoundaryLeft(text, pos) {
+        if (pos === 0)
+            return 0;
+        let i = pos - 1;
+        // Skip whitespace
+        while (i > 0 && /\s/.test(text[i])) {
+            i--;
+        }
+        // Skip word characters
+        while (i > 0 && /\w/.test(text[i - 1])) {
+            i--;
+        }
+        return i;
+    }
+    /**
+     * Finds the word boundary to the right of a position.
+     */
+    findWordBoundaryRight(text, pos) {
+        if (pos >= text.length)
+            return text.length;
+        let i = pos;
+        // Skip current word
+        while (i < text.length && /\w/.test(text[i])) {
+            i++;
+        }
+        // Skip whitespace
+        while (i < text.length && /\s/.test(text[i])) {
+            i++;
+        }
+        return i;
+    }
+    /**
+     * Focuses the hidden input.
+     */
+    focus() {
+        this.hiddenInput.focus();
+    }
+    /**
+     * Blurs the hidden input.
+     */
+    blur() {
+        this.hiddenInput.blur();
+    }
+    /**
+     * Checks if the hidden input is focused.
+     */
+    hasFocus() {
+        return document.activeElement === this.hiddenInput;
+    }
+    /**
+     * Cleans up the handler.
+     */
+    destroy() {
+        this.hiddenInput.removeEventListener('input', this.handleInput);
+        this.hiddenInput.removeEventListener('keydown', this.handleKeyDown);
+        this.hiddenInput.removeEventListener('compositionstart', this.handleCompositionStart);
+        this.hiddenInput.removeEventListener('compositionend', this.handleCompositionEnd);
+        if (this.hiddenInput.parentNode) {
+            this.hiddenInput.parentNode.removeChild(this.hiddenInput);
+        }
+    }
+}
+/**
+ * CSS styles for the keyboard handler.
+ */
+export const keyboardStyles = `
+  .${CLASS_PREFIX}-hidden-input {
+    position: absolute;
+    left: -9999px;
+    top: 0;
+    width: 1px;
+    height: 1px;
+    opacity: 0;
+    pointer-events: none;
+  }
+`;

@@ -1,0 +1,17 @@
+{
+  "name": "@agentnotes/editor",
+  "version": "0.1.0",
+  "description": "Vanilla JS text editor with externally-managed state",
+  "type": "module",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "scripts": {
+    "build": "tsc",
+    "build:demo": "tsc -p demo/tsconfig.json",
+    "typecheck": "tsc --noEmit",
+    "dev": "tsc --watch"
+  },
+  "devDependencies": {
+    "typescript": "^5.3.3"
+  }
+}

@@ -4,11 +4,12 @@ A local-first knowledge base with TypeScript CLI and Electron GUI, storing markd
 
 ## Project Structure
 
-This is a pnpm monorepo with three packages:
+This is a pnpm monorepo with four packages:
 
 ```
 packages/
 ├── engine/      # Shared TypeScript business logic
+├── editor/      # Vanilla JS text editor with externally-managed state
 ├── cli/         # TypeScript CLI
 └── electron/    # Electron GUI application
 ```
@@ -21,6 +22,20 @@ Core business logic used by both CLI and Electron:
 - `src/notes/` - NoteStore class (central API), search functionality
 - `src/utils/` - Slugify, normalization, formatting (toTitleCase), validation
 
+### Editor (`@agentnotes/editor`)
+Vanilla JS text editor with externally-managed state (no rich text framework dependencies):
+- `src/Editor.ts` - Main Editor class, coordinates rendering and input handling
+- `src/types.ts` - EditorState, Selection, Decoration, EditorCallbacks interfaces
+- `src/render/TextRenderer.ts` - Renders text with decoration styling (bold, italic, fontSize, highlight)
+- `src/render/CursorRenderer.ts` - Blinking cursor positioning and animation
+- `src/render/SelectionRenderer.ts` - Text selection highlight rendering
+- `src/input/KeyboardHandler.ts` - Keyboard input, hidden textarea for text entry
+- `src/input/MouseHandler.ts` - Click and drag selection handling
+- `src/utils/position.ts` - Character position calculations from DOM
+- `src/utils/decorations.ts` - Decoration merging and span splitting utilities
+
+The editor uses an external state model: the parent component owns `EditorState` (text, selection, decorations) and the editor emits callbacks (`onInsert`, `onDelete`, `onSelectionChange`) for the parent to update state and re-render.
+
 ### CLI (`@agentnotes/cli`)
 TypeScript CLI built with Commander:
 - `src/cli.ts` - Commander setup, store initialization
@@ -29,12 +44,13 @@ TypeScript CLI built with Commander:
 - `src/utils/` - stdin, editor, note resolution utilities
 
 ### Electron (`packages/electron`)
-GUI application:
+GUI application using `@agentnotes/editor` for text editing:
 - `main.ts` - Electron main process, IPC handlers (thin wrapper around NoteStore)
 - `preload.ts` - Context bridge exposing APIs to renderer
 - `src/renderer.ts` - Renderer entry point
 - `src/types.ts` - Local type definitions for renderer (browser-compatible)
 - `src/components/` - UI components (NoteList, NoteView, CommentsPanel)
+- `src/components/NoteView.ts` - Main editor integration, markdown decoration parsing, comment highlights
 - `src/lib/browser-utils.ts` - Browser-compatible utilities (toTitleCase, anchoring, highlights)
 - `src/lib/noteStore.ts` - IPC caching layer
 
@@ -125,11 +141,13 @@ On save, edits are converted to text operations and comment ranges are transform
 ## GUI Features
 
 - Custom draggable title bar with macOS-style traffic light buttons
-- Three-panel layout: note list, note content (TipTap editor), comments panel
+- Three-panel layout: note list, note content editor, comments panel
+- Plain text editor with decoration-based markdown styling (headings, bold, italic, code, strikethrough)
 - Directory hierarchy with collapsible folders
 - Drag-and-drop note moving
-- Text selection creates comments with anchored highlights
-- Real-time markdown styling with autosave
+- Text selection creates comments with anchored highlights (yellow background decorations)
+- Real-time autosave (200ms debounce)
+- Heading action button for title case formatting
 
 ## CLI Examples
 
