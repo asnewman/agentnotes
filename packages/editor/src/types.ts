@@ -12,7 +12,7 @@ export interface Selection {
 /**
  * Types of text decorations supported by the editor.
  */
-export type DecorationType = 'bold' | 'italic' | 'underline' | 'highlight' | 'fontSize';
+export type DecorationType = 'bold' | 'italic' | 'underline' | 'highlight' | 'fontSize' | 'color';
 
 /**
  * A decoration applied to a range of text.

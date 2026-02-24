@@ -321,6 +321,17 @@ export class NoteView {
         });
       }
 
+      // Links ([text](url))
+      const linkRegex = /\[([^\]]+)\]\([^)]+\)/g;
+      while ((match = linkRegex.exec(line)) !== null) {
+        decorations.push({
+          from: offset + match.index,
+          to: offset + match.index + match[0].length,
+          type: 'color',
+          attributes: { color: '#2563eb' },
+        });
+      }
+
       offset += line.length + 1; // +1 for newline
     }
 

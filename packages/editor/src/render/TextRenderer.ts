@@ -92,6 +92,10 @@ export class TextRenderer {
           const size = decoration.attributes?.size || 16;
           styles.push(`font-size: ${size}px`);
           break;
+        case 'color':
+          const textColor = decoration.attributes?.color || '#000000';
+          styles.push(`color: ${textColor}`);
+          break;
       }
     }
 
