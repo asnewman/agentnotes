@@ -1,0 +1,17 @@
+{
+  "name": "@agentnotes/simple-editor",
+  "version": "0.1.0",
+  "description": "Simple text renderer component",
+  "type": "module",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "scripts": {
+    "build": "tsc",
+    "typecheck": "tsc --noEmit",
+    "dev": "tsc --watch",
+    "demo": "node demo/server.js"
+  },
+  "devDependencies": {
+    "typescript": "^5.3.3"
+  }
+}

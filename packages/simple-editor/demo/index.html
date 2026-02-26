@@ -1,0 +1,59 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>SimpleEditor Demo</title>
+  <style>
+    body {
+      font-family: system-ui, -apple-system, sans-serif;
+      max-width: 800px;
+      margin: 40px auto;
+      padding: 20px;
+    }
+    .container {
+      border: 1px solid #ccc;
+      padding: 16px;
+      margin-bottom: 20px;
+      background-color: #f9f9f9;
+    }
+    button {
+      padding: 8px 16px;
+      margin-right: 8px;
+      cursor: pointer;
+    }
+    input {
+      padding: 8px;
+      width: 300px;
+      margin-right: 8px;
+    }
+  </style>
+</head>
+<body>
+  <h1>SimpleEditor Demo</h1>
+
+  <div id="editor-container" class="container"></div>
+
+  <div>
+    <input type="text" id="text-input" placeholder="Enter new text...">
+    <button id="update-btn">Update Text</button>
+  </div>
+
+  <script type="module">
+    import { SimpleEditor } from '../dist/index.js';
+
+    // Create editor instance
+    const editor = new SimpleEditor(
+      'editor-container',
+      { text: 'Hello, SimpleEditor!' }
+    );
+
+    // Set up button click handler
+    document.getElementById('update-btn').addEventListener('click', () => {
+      const input = document.getElementById('text-input');
+      editor.setText(input.value);
+      input.value = '';
+    });
+  </script>
+</body>
+</html>
