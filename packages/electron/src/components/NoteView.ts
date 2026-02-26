@@ -1,4 +1,4 @@
-import { Editor, EditorState, Selection, Decoration } from '@agentnotes/editor';
+import { Editor, EditorState, Selection, Decoration, ImagePasteData } from '@agentnotes/editor';
 import { buildAnchorFromRange, getAllHighlightRanges, toTitleCase } from '../lib/browser-utils';
 import type { CommentAnchor, Note } from '../types';
 import { createTagChip } from './TagChip';
@@ -54,6 +54,7 @@ export class NoteView {
   private headingMenuKeyHandler: ((event: KeyboardEvent) => void) | null;
   private isHeadingMenuOpen: boolean;
   private headingActionHideTimer: number | null;
+  private notesDirectory: string | null;
 
   constructor(headerContainer: HTMLElement, contentContainer: HTMLElement) {
     this.headerContainer = headerContainer;
@@ -100,6 +101,11 @@ export class NoteView {
     this.headingMenuKeyHandler = null;
     this.isHeadingMenuOpen = false;
     this.headingActionHideTimer = null;
+    this.notesDirectory = null;
+  }
+
+  setNotesDirectory(directory: string | null): void {
+    this.notesDirectory = directory;
   }
 
   setOnCommentCreate(callback: CommentCreateHandler): void {
@@ -141,6 +147,9 @@ export class NoteView {
         },
         onSelectionChange: (selection: Selection) => {
           this.handleSelectionChange(selection);
+        },
+        onImagePaste: (imageData: ImagePasteData) => {
+          void this.handleImagePaste(imageData);
         },
       },
       {
@@ -250,6 +259,53 @@ export class NoteView {
     this.handleSelectionUpdate();
   }
 
+  private async handleImagePaste(imageData: ImagePasteData): Promise<void> {
+    if (!this.editor || !this.currentNote) {
+      return;
+    }
+
+    // Save the image to the filesystem
+    const result = await window.api.saveImage(imageData.data, imageData.mimeType, imageData.filename);
+    if (!result.success || !result.relativePath) {
+      console.error('Failed to save image:', result.error);
+      return;
+    }
+
+    // Generate markdown syntax for the image
+    const altText = imageData.filename ? imageData.filename.replace(/\.[^.]+$/, '') : 'image';
+    const markdown = `![${altText}](./${result.relativePath})`;
+
+    // Insert the markdown at the cursor position
+    const { anchor, head } = this.editorState.selection;
+    const position = Math.min(anchor, head);
+    const text = this.editorState.text;
+
+    // Ensure the image is on its own line
+    let insertText = markdown;
+    let insertPosition = position;
+
+    // Check if we need to add a newline before
+    if (position > 0 && text[position - 1] !== '\n') {
+      insertText = '\n' + insertText;
+    }
+
+    // Check if we need to add a newline after
+    if (position < text.length && text[position] !== '\n') {
+      insertText = insertText + '\n';
+    }
+
+    // If there's a selection, delete it first
+    if (anchor !== head) {
+      const from = Math.min(anchor, head);
+      const to = Math.max(anchor, head);
+      this.handleDelete(from, to);
+      insertPosition = from;
+    }
+
+    // Insert the markdown
+    this.handleInsert(insertPosition, insertText);
+  }
+
   private updateDecorations(): void {
     // Combine markdown decorations with comment highlight decorations
     const markdownDecorations = this.parseMarkdownDecorations(this.editorState.text);
@@ -321,8 +377,8 @@ export class NoteView {
         });
       }
 
-      // Links ([text](url))
-      const linkRegex = /\[([^\]]+)\]\([^)]+\)/g;
+      // Links ([text](url)) - but not images
+      const linkRegex = /(?<!!)\[([^\]]+)\]\([^)]+\)/g;
       while ((match = linkRegex.exec(line)) !== null) {
         decorations.push({
           from: offset + match.index,
@@ -332,10 +388,48 @@ export class NoteView {
         });
       }
 
+      // Images (![alt](url)) - must be on their own line
+      const imageRegex = /^!\[([^\]]*)\]\(([^)]+)\)\s*$/;
+      const imageMatch = line.match(imageRegex);
+      if (imageMatch) {
+        const alt = imageMatch[1] || 'image';
+        const src = imageMatch[2];
+        // Resolve relative path to absolute file:// URL if needed
+        const resolvedSrc = this.resolveImagePath(src);
+        decorations.push({
+          from: offset,
+          to: offset + line.length,
+          type: 'image',
+          attributes: { src: resolvedSrc, alt },
+        });
+      }
+
       offset += line.length + 1; // +1 for newline
     }
 
     return decorations;
+  }
+
+  private resolveImagePath(src: string): string {
+    // If it's already an absolute URL, return as-is
+    if (src.startsWith('http://') || src.startsWith('https://') || src.startsWith('file://')) {
+      return src;
+    }
+
+    // Handle relative paths starting with ./
+    if (src.startsWith('./')) {
+      src = src.slice(2);
+    }
+
+    // Resolve to absolute file:// URL using the notes directory
+    if (this.notesDirectory) {
+      // Construct the full absolute path
+      const absolutePath = `${this.notesDirectory}/${src}`;
+      return `file://${absolutePath}`;
+    }
+
+    // Fallback: return the original path
+    return src;
   }
 
   private getCommentDecorations(note: Note): Decoration[] {

@@ -1,4 +1,4 @@
-import { EditorState, EditorCallbacks, EditorOptions, Selection } from './types.js';
+import { EditorState, EditorCallbacks, EditorOptions, Selection, ImagePasteData } from './types.js';
 import { TextRenderer, textRendererStyles } from './render/TextRenderer.js';
 import { CursorRenderer, cursorStyles } from './render/CursorRenderer.js';
 import { SelectionRenderer, selectionStyles } from './render/SelectionRenderer.js';
@@ -87,6 +87,10 @@ export class Editor {
     // Bind focus/blur events
     this.editorRoot.addEventListener('focus', this.handleFocus, true);
     this.editorRoot.addEventListener('blur', this.handleBlur, true);
+
+    // Bind drag-and-drop events for images
+    this.editorRoot.addEventListener('dragover', this.handleDragOver);
+    this.editorRoot.addEventListener('drop', this.handleDrop);
   }
 
   /**
@@ -136,6 +140,63 @@ export class Editor {
     this.hasFocus = false;
     this.renderCursorAndSelection();
   };
+
+  /**
+   * Handles dragover event for image drag-and-drop.
+   */
+  private handleDragOver = (event: DragEvent): void => {
+    // Check if dragging image files
+    if (event.dataTransfer?.types.includes('Files')) {
+      const items = event.dataTransfer.items;
+      for (let i = 0; i < items.length; i++) {
+        if (items[i].type.startsWith('image/')) {
+          event.preventDefault();
+          event.dataTransfer.dropEffect = 'copy';
+          return;
+        }
+      }
+    }
+  };
+
+  /**
+   * Handles drop event for image drag-and-drop.
+   */
+  private handleDrop = (event: DragEvent): void => {
+    const files = event.dataTransfer?.files;
+    if (!files || files.length === 0) {
+      return;
+    }
+
+    for (let i = 0; i < files.length; i++) {
+      const file = files[i];
+      if (file.type.startsWith('image/')) {
+        event.preventDefault();
+        this.processDroppedImage(file);
+        return; // Only process first image
+      }
+    }
+  };
+
+  /**
+   * Processes a dropped image file.
+   */
+  private processDroppedImage(file: File): void {
+    const reader = new FileReader();
+    reader.onload = () => {
+      const result = reader.result as string;
+      // Remove data URL prefix to get just base64 data
+      const base64Data = result.split(',')[1];
+      if (base64Data && this.callbacks.onImagePaste) {
+        const imageData: ImagePasteData = {
+          data: base64Data,
+          mimeType: file.type,
+          filename: file.name,
+        };
+        this.callbacks.onImagePaste(imageData);
+      }
+    };
+    reader.readAsDataURL(file);
+  }
 
   /**
    * Re-renders the editor with new state.
@@ -222,6 +283,8 @@ export class Editor {
   destroy(): void {
     this.editorRoot.removeEventListener('focus', this.handleFocus, true);
     this.editorRoot.removeEventListener('blur', this.handleBlur, true);
+    this.editorRoot.removeEventListener('dragover', this.handleDragOver);
+    this.editorRoot.removeEventListener('drop', this.handleDrop);
 
     this.textRenderer.destroy();
     this.cursorRenderer.destroy();

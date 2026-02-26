@@ -7,6 +7,7 @@ import type {
   Note,
   NotesListResult,
   PreloadApi,
+  SaveImageResult,
 } from './src/types';
 
 const api: PreloadApi = {
@@ -43,6 +44,8 @@ const api: PreloadApi = {
     }) as Promise<CommentMutationResult>,
   deleteComment: (noteId: string, commentId: string) =>
     ipcRenderer.invoke('notes:deleteComment', { noteId, commentId }) as Promise<CommentMutationResult>,
+  saveImage: (data: string, mimeType: string, filename?: string) =>
+    ipcRenderer.invoke('images:save', { data, mimeType, filename }) as Promise<SaveImageResult>,
   getDirectory: () => ipcRenderer.invoke('directory:get') as Promise<string | null>,
   selectDirectory: () => ipcRenderer.invoke('directory:select') as Promise<string | null>,
   windowMinimize: () => ipcRenderer.send('window:minimize'),

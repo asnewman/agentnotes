@@ -11,6 +11,7 @@ export {
   DecorationType,
   StyledSpan,
   CharacterMetrics,
+  ImagePasteData,
 } from './types.js';
 
 // Utilities

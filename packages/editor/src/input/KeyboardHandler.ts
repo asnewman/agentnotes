@@ -1,4 +1,4 @@
-import { Selection, EditorCallbacks, EditorState } from '../types.js';
+import { Selection, EditorCallbacks, EditorState, ImagePasteData } from '../types.js';
 
 const CLASS_PREFIX = 'agentnotes-editor';
 
@@ -58,6 +58,7 @@ export class KeyboardHandler {
   private bindEvents(): void {
     this.hiddenInput.addEventListener('input', this.handleInput);
     this.hiddenInput.addEventListener('keydown', this.handleKeyDown);
+    this.hiddenInput.addEventListener('paste', this.handlePaste);
     this.hiddenInput.addEventListener('compositionstart', this.handleCompositionStart);
     this.hiddenInput.addEventListener('compositionend', this.handleCompositionEnd);
   }
@@ -89,6 +90,50 @@ export class KeyboardHandler {
   };
 
   private isComposing = false;
+
+  /**
+   * Handles paste events for images.
+   */
+  private handlePaste = (event: ClipboardEvent): void => {
+    const items = event.clipboardData?.items;
+    if (!items) {
+      return;
+    }
+
+    // Check for image items in clipboard
+    for (let i = 0; i < items.length; i++) {
+      const item = items[i];
+      if (item.type.startsWith('image/')) {
+        event.preventDefault();
+        const blob = item.getAsFile();
+        if (blob) {
+          this.processImageBlob(blob, item.type);
+        }
+        return;
+      }
+    }
+  };
+
+  /**
+   * Processes an image blob and calls the onImagePaste callback.
+   */
+  private processImageBlob(blob: Blob, mimeType: string, filename?: string): void {
+    const reader = new FileReader();
+    reader.onload = () => {
+      const result = reader.result as string;
+      // Remove data URL prefix to get just base64 data
+      const base64Data = result.split(',')[1];
+      if (base64Data && this.callbacks.onImagePaste) {
+        const imageData: ImagePasteData = {
+          data: base64Data,
+          mimeType,
+          filename,
+        };
+        this.callbacks.onImagePaste(imageData);
+      }
+    };
+    reader.readAsDataURL(blob);
+  }
 
   private handleCompositionStart = (): void => {
     this.isComposing = true;
@@ -370,6 +415,7 @@ export class KeyboardHandler {
   destroy(): void {
     this.hiddenInput.removeEventListener('input', this.handleInput);
     this.hiddenInput.removeEventListener('keydown', this.handleKeyDown);
+    this.hiddenInput.removeEventListener('paste', this.handlePaste);
     this.hiddenInput.removeEventListener('compositionstart', this.handleCompositionStart);
     this.hiddenInput.removeEventListener('compositionend', this.handleCompositionEnd);
 

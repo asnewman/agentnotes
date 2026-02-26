@@ -46,7 +46,9 @@ export class TextRenderer {
 
     for (const span of spans) {
       const element = this.createSpanElement(span);
-      this.textElement.appendChild(element);
+      if (element) {
+        this.textElement.appendChild(element);
+      }
     }
 
     // If text ends with a newline, add a zero-width space after it.
@@ -64,8 +66,15 @@ export class TextRenderer {
 
   /**
    * Creates a span element with appropriate styles for decorations.
+   * Returns null if the span should not be rendered (e.g., image markdown text).
    */
-  private createSpanElement(span: StyledSpan): HTMLSpanElement {
+  private createSpanElement(span: StyledSpan): HTMLElement | null {
+    // Check if this span has an image decoration
+    const imageDecoration = span.decorations.find((d) => d.type === 'image');
+    if (imageDecoration) {
+      return this.createImageElement(span, imageDecoration);
+    }
+
     const element = document.createElement('span');
     element.textContent = span.text;
     element.dataset.from = String(span.from);
@@ -104,6 +113,48 @@ export class TextRenderer {
     }
 
     return element;
+  }
+
+  /**
+   * Creates an image element for image decorations.
+   */
+  private createImageElement(span: StyledSpan, decoration: Decoration): HTMLElement {
+    const wrapper = document.createElement('div');
+    wrapper.className = `${CLASS_PREFIX}-image-wrapper`;
+    wrapper.dataset.from = String(span.from);
+    wrapper.dataset.to = String(span.to);
+    wrapper.style.cssText = `
+      display: block;
+      margin: 8px 0;
+      max-width: 100%;
+    `;
+
+    const img = document.createElement('img');
+    const src = decoration.attributes?.src as string || '';
+    const alt = decoration.attributes?.alt as string || 'Image';
+    img.src = src;
+    img.alt = alt;
+    img.style.cssText = `
+      max-width: 100%;
+      height: auto;
+      border-radius: 4px;
+    `;
+
+    // Show the raw markdown text below the image for editing context
+    const markdownText = document.createElement('span');
+    markdownText.textContent = span.text;
+    markdownText.style.cssText = `
+      display: block;
+      font-size: 12px;
+      color: #666;
+      margin-top: 4px;
+      font-family: monospace;
+    `;
+
+    wrapper.appendChild(img);
+    wrapper.appendChild(markdownText);
+
+    return wrapper;
   }
 
   /**

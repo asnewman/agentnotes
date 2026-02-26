@@ -2,6 +2,7 @@ import { app, BrowserWindow, dialog, ipcMain } from 'electron';
 import type { OpenDialogOptions } from 'electron';
 import path from 'node:path';
 import fs from 'node:fs';
+import crypto from 'node:crypto';
 import Store from 'electron-store';
 import { NoteStore } from '@agentnotes/engine';
 import type {
@@ -107,6 +108,33 @@ function isCreateDirectoryPayload(payload: unknown): payload is CreateDirectoryP
 
 function isDeleteDirectoryPayload(payload: unknown): payload is DeleteDirectoryPayload {
   return isRecord(payload) && typeof payload.path === 'string';
+}
+
+interface SaveImagePayload {
+  data: string;
+  mimeType: string;
+  filename?: string;
+}
+
+interface SaveImageResult {
+  success: boolean;
+  error?: string;
+  relativePath?: string;
+}
+
+function isSaveImagePayload(payload: unknown): payload is SaveImagePayload {
+  return isRecord(payload) && typeof payload.data === 'string' && typeof payload.mimeType === 'string';
+}
+
+function getExtensionFromMimeType(mimeType: string): string {
+  const mimeToExt: Record<string, string> = {
+    'image/png': 'png',
+    'image/jpeg': 'jpg',
+    'image/gif': 'gif',
+    'image/webp': 'webp',
+    'image/svg+xml': 'svg',
+  };
+  return mimeToExt[mimeType] || 'png';
 }
 
 function createWindow(): void {
@@ -334,3 +362,44 @@ ipcMain.handle('directory:select', async (): Promise<string | null> => {
 
   return null;
 });
+
+ipcMain.handle(
+  'images:save',
+  async (_event, payload: unknown): Promise<SaveImageResult> => {
+    if (!isSaveImagePayload(payload)) {
+      return { success: false, error: 'Invalid save image payload' };
+    }
+
+    const notesDir = getNotesDir();
+    if (!notesDir) {
+      return { success: false, error: 'Notes directory not set' };
+    }
+
+    const imagesDir = path.join(notesDir, 'images');
+
+    // Create images directory if it doesn't exist
+    if (!fs.existsSync(imagesDir)) {
+      try {
+        fs.mkdirSync(imagesDir, { recursive: true });
+      } catch (err) {
+        return { success: false, error: 'Failed to create images directory' };
+      }
+    }
+
+    // Generate unique filename: timestamp-hash.ext
+    const timestamp = Date.now();
+    const hash = crypto.createHash('md5').update(payload.data).digest('hex').slice(0, 8);
+    const ext = getExtensionFromMimeType(payload.mimeType);
+    const filename = `${timestamp}-${hash}.${ext}`;
+    const filePath = path.join(imagesDir, filename);
+
+    // Write the image file
+    try {
+      const buffer = Buffer.from(payload.data, 'base64');
+      fs.writeFileSync(filePath, buffer);
+      return { success: true, relativePath: `images/${filename}` };
+    } catch (err) {
+      return { success: false, error: 'Failed to save image' };
+    }
+  },
+);

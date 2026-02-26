@@ -568,6 +568,7 @@ async function handleSelectDirectory(): Promise<void> {
   appElement.classList.remove('hidden');
 
   updateDirectoryIndicator(selectedPath);
+  noteView?.setNotesDirectory(selectedPath);
   clearCache();
   await loadNotes();
 }
@@ -664,6 +665,7 @@ async function init(): Promise<void> {
     directoryOverlay.classList.add('hidden');
     appElement.classList.remove('hidden');
     updateDirectoryIndicator(currentDirectory);
+    noteView?.setNotesDirectory(currentDirectory);
     await loadNotes();
   } catch (error) {
     console.error('Error checking directory:', error);

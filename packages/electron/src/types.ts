@@ -56,6 +56,20 @@ export interface DirectoryMutationResult extends OperationResult {
   directories?: string[];
 }
 
+export interface SaveImagePayload {
+  /** Base64-encoded image data */
+  data: string;
+  /** MIME type of the image (e.g., "image/png") */
+  mimeType: string;
+  /** Original filename if provided */
+  filename?: string;
+}
+
+export interface SaveImageResult extends OperationResult {
+  /** Relative path to the saved image (e.g., "images/1234567890-abc123.png") */
+  relativePath?: string;
+}
+
 export type NotesListResponse = Note[] | NotesListResult;
 
 export interface PreloadApi {
@@ -78,6 +92,7 @@ export interface PreloadApi {
     anchor: CommentAnchor,
   ) => Promise<CommentMutationResult>;
   deleteComment: (noteId: string, commentId: string) => Promise<CommentMutationResult>;
+  saveImage: (data: string, mimeType: string, filename?: string) => Promise<SaveImageResult>;
   getDirectory: () => Promise<string | null>;
   selectDirectory: () => Promise<string | null>;
   windowMinimize: () => void;

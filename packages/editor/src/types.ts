@@ -12,7 +12,19 @@ export interface Selection {
 /**
  * Types of text decorations supported by the editor.
  */
-export type DecorationType = 'bold' | 'italic' | 'underline' | 'highlight' | 'fontSize' | 'color';
+export type DecorationType = 'bold' | 'italic' | 'underline' | 'highlight' | 'fontSize' | 'color' | 'image';
+
+/**
+ * Data for an image being pasted or dropped into the editor.
+ */
+export interface ImagePasteData {
+  /** Base64-encoded image data */
+  data: string;
+  /** MIME type of the image (e.g., "image/png") */
+  mimeType: string;
+  /** Original filename if from drag-drop */
+  filename?: string;
+}
 
 /**
  * A decoration applied to a range of text.
@@ -51,6 +63,8 @@ export interface EditorCallbacks {
   onDelete?: (from: number, to: number) => void;
   /** Called when the selection changes */
   onSelectionChange?: (selection: Selection) => void;
+  /** Called when an image is pasted or dropped */
+  onImagePaste?: (imageData: ImagePasteData) => void;
 }
 
 /**
