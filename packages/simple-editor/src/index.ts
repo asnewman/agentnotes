@@ -21,7 +21,9 @@ const CURSOR_BLINK_STYLE = `
     height: 1em;
     background-color: #000;
     animation: blink 1s infinite;
-    margin: 0 -1px;
+    position: relative;
+    left: -2px;
+    margin-right: -2px;
   }
 `;
 
