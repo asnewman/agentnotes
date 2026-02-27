@@ -48,7 +48,11 @@
     import { SimpleEditor } from '../dist/index.js';
 
     // Track state in local variables
-    let text = 'Hello, SimpleEditor!';
+    let text = [
+      { value: 'Hello, ', marks: [] },
+      { value: 'SimpleEditor', marks: ['bold'] },
+      { value: '!', marks: [] }
+    ];
     let cursorPos = 0;
 
     const textInput = document.getElementById('text-input');
@@ -69,9 +73,10 @@
     // Update text
     updateBtn.addEventListener('click', () => {
       if (textInput.value) {
-        text = textInput.value;
+        text = [{ value: textInput.value, marks: [] }];
         // Clamp cursor to new text length
-        cursorPos = Math.min(cursorPos, text.length);
+        const totalLength = text.reduce((sum, n) => sum + n.value.length, 0);
+        cursorPos = Math.min(cursorPos, totalLength);
         cursorPosInput.value = cursorPos;
         textInput.value = '';
         rerender();
@@ -93,7 +98,8 @@
 
     // Move cursor right
     cursorNextBtn.addEventListener('click', () => {
-      cursorPos = Math.min(text.length, cursorPos + 1);
+      const totalLength = text.reduce((sum, n) => sum + n.value.length, 0);
+      cursorPos = Math.min(totalLength, cursorPos + 1);
       cursorPosInput.value = cursorPos;
       rerender();
     });
