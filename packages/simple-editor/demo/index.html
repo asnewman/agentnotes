@@ -49,9 +49,22 @@
 
     // Track state in local variables
     let text = [
-      { value: 'Hello, ', marks: [] },
-      { value: 'SimpleEditor', marks: ['bold'] },
-      { value: '!', marks: [] }
+      { value: 'Introduction to SimpleEditor', marks: ['bold'], size: '24px' },
+      { value: '\n\n', marks: [] },
+      { value: 'SimpleEditor is a lightweight text editor with support for rich text styling. It provides an example of how to build a custom editor with marks and size properties.\n\n', marks: [] },
+      { value: 'Key Features', marks: ['bold'], size: '18px' },
+      { value: '\n\n', marks: [] },
+      { value: 'Bold text support', marks: ['bold'] },
+      { value: ' - use the marks property\n', marks: [] },
+      { value: 'Italic text support', marks: ['italic'] },
+      { value: ' - combine with other marks\n', marks: [] },
+      { value: 'Custom font sizes', marks: [] },
+      { value: ' - set via the size property\n', marks: [] },
+      { value: 'Cursor positioning', marks: ['bold'] },
+      { value: ' - navigate through text\n\n', marks: [] },
+      { value: 'Getting Started', marks: ['bold'], size: '18px' },
+      { value: '\n\n', marks: [] },
+      { value: 'Edit the text above or use the controls below to update the editor content and cursor position.', marks: ['italic'] }
     ];
     let cursorPos = 0;
 

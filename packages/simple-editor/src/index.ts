@@ -3,6 +3,7 @@ export type Mark = 'bold' | 'italic' | 'underline';
 export interface TextNode {
   value: string;
   marks?: Mark[];
+  size?: string;
 }
 
 export interface SimpleEditorOptions {
@@ -53,18 +54,37 @@ export class SimpleEditor {
     document.head.appendChild(style);
   }
 
-  private applyMarks(el: HTMLSpanElement, marks?: Mark[]): void {
-    if (!marks || marks.length === 0) return;
+  private applyTextNodeStyling(el: HTMLSpanElement, marks?: Mark[], size?: string): void {
+    if (marks && marks.length > 0) {
+      marks.forEach(mark => {
+        if (mark === 'bold') {
+          el.style.fontWeight = 'bold';
+        } else if (mark === 'italic') {
+          el.style.fontStyle = 'italic';
+        } else if (mark === 'underline') {
+          el.style.textDecoration = 'underline';
+        }
+      });
+    }
 
-    marks.forEach(mark => {
-      if (mark === 'bold') {
-        el.style.fontWeight = 'bold';
-      } else if (mark === 'italic') {
-        el.style.fontStyle = 'italic';
-      } else if (mark === 'underline') {
-        el.style.textDecoration = 'underline';
+    if (size) {
+      el.style.fontSize = size;
+    }
+  }
+
+  private renderTextWithNewlines(container: HTMLElement, text: string, marks?: Mark[], size?: string): void {
+    const lines = text.split('\n');
+    for (let i = 0; i < lines.length; i++) {
+      if (lines[i]) {
+        const span = document.createElement('span');
+        span.textContent = lines[i];
+        this.applyTextNodeStyling(span, marks, size);
+        container.appendChild(span);
       }
-    });
+      if (i < lines.length - 1) {
+        container.appendChild(document.createElement('br'));
+      }
+    }
   }
 
   private createCursor(): HTMLSpanElement {
@@ -95,29 +115,14 @@ export class SimpleEditor {
           const beforeText = node.value.substring(0, pos - nodeStart);
           const afterText = node.value.substring(pos - nodeStart);
 
-          if (beforeText) {
-            const beforeSpan = document.createElement('span');
-            beforeSpan.textContent = beforeText;
-            this.applyMarks(beforeSpan, node.marks);
-            div.appendChild(beforeSpan);
-          }
-
+          this.renderTextWithNewlines(div, beforeText, node.marks, node.size);
           div.appendChild(this.createCursor());
-
-          if (afterText) {
-            const afterSpan = document.createElement('span');
-            afterSpan.textContent = afterText;
-            this.applyMarks(afterSpan, node.marks);
-            div.appendChild(afterSpan);
-          }
+          this.renderTextWithNewlines(div, afterText, node.marks, node.size);
 
           cursorInserted = true;
         } else {
           // Normal node rendering
-          const span = document.createElement('span');
-          span.textContent = node.value;
-          this.applyMarks(span, node.marks);
-          div.appendChild(span);
+          this.renderTextWithNewlines(div, node.value, node.marks, node.size);
         }
 
         offset = nodeEnd;
@@ -125,10 +130,7 @@ export class SimpleEditor {
     } else {
       // No cursor, just render all nodes
       for (const node of this.options.text) {
-        const span = document.createElement('span');
-        span.textContent = node.value;
-        this.applyMarks(span, node.marks);
-        div.appendChild(span);
+        this.renderTextWithNewlines(div, node.value, node.marks, node.size);
       }
     }
 
