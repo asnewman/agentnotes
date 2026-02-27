@@ -30,8 +30,6 @@
   </style>
 </head>
 <body>
-  <h1>SimpleEditor Demo</h1>
-
   <div id="editor-container" class="container"></div>
 
   <div>
@@ -39,20 +37,72 @@
     <button id="update-btn">Update Text</button>
   </div>
 
+  <div>
+    <label>Cursor Position: <input type="number" id="cursor-pos-input" min="0" value="0"></label>
+    <button id="cursor-prev">←</button>
+    <button id="cursor-next">→</button>
+    <button id="cursor-clear">Clear Cursor</button>
+  </div>
+
   <script type="module">
     import { SimpleEditor } from '../dist/index.js';
 
-    // Create editor instance
-    const editor = new SimpleEditor(
-      'editor-container',
-      { text: 'Hello, SimpleEditor!' }
-    );
+    // Track state in local variables
+    let text = 'Hello, SimpleEditor!';
+    let cursorPos = 0;
 
-    // Set up button click handler
-    document.getElementById('update-btn').addEventListener('click', () => {
-      const input = document.getElementById('text-input');
-      editor.setText(input.value);
-      input.value = '';
+    const textInput = document.getElementById('text-input');
+    const updateBtn = document.getElementById('update-btn');
+    const cursorPosInput = document.getElementById('cursor-pos-input');
+    const cursorPrevBtn = document.getElementById('cursor-prev');
+    const cursorNextBtn = document.getElementById('cursor-next');
+    const cursorClearBtn = document.getElementById('cursor-clear');
+
+    // Helper to clear container and recreate editor
+    function rerender() {
+      new SimpleEditor('editor-container', { text, cursorPos });
+    }
+
+    // Initial render
+    rerender();
+
+    // Update text
+    updateBtn.addEventListener('click', () => {
+      if (textInput.value) {
+        text = textInput.value;
+        // Clamp cursor to new text length
+        cursorPos = Math.min(cursorPos, text.length);
+        cursorPosInput.value = cursorPos;
+        textInput.value = '';
+        rerender();
+      }
+    });
+
+    // Update cursor position
+    cursorPosInput.addEventListener('change', () => {
+      cursorPos = parseInt(cursorPosInput.value);
+      rerender();
+    });
+
+    // Move cursor left
+    cursorPrevBtn.addEventListener('click', () => {
+      cursorPos = Math.max(0, cursorPos - 1);
+      cursorPosInput.value = cursorPos;
+      rerender();
+    });
+
+    // Move cursor right
+    cursorNextBtn.addEventListener('click', () => {
+      cursorPos = Math.min(text.length, cursorPos + 1);
+      cursorPosInput.value = cursorPos;
+      rerender();
+    });
+
+    // Clear cursor
+    cursorClearBtn.addEventListener('click', () => {
+      cursorPos = -1;
+      cursorPosInput.value = '0';
+      rerender();
     });
   </script>
 </body>
