@@ -1,0 +1,259 @@
+import { describe, it, expect, beforeEach, afterEach } from 'vitest';
+import { SimpleEditor } from './index';
+
+describe('SimpleEditor - Text Rendering', () => {
+  let container: HTMLDivElement;
+
+  beforeEach(() => {
+    container = document.createElement('div');
+    container.id = 'test-container';
+    document.body.appendChild(container);
+  });
+
+  afterEach(() => {
+    document.body.removeChild(container);
+  });
+
+  it('should render plain text with no marks, newlines, or sizes', () => {
+    new SimpleEditor('test-container', {
+      text: [{ value: 'Hello World' }],
+    });
+
+    const editorDiv = container.querySelector('#simple-editor-container');
+    expect(editorDiv).toBeDefined();
+
+    const span = editorDiv?.querySelector('span');
+    expect(span).toBeDefined();
+    expect(span?.textContent).toBe('Hello World');
+    expect(span?.style.fontWeight).toBe('');
+    expect(span?.style.fontStyle).toBe('');
+    expect(span?.style.textDecoration).toBe('');
+    expect(span?.style.fontSize).toBe('');
+  });
+
+  it('should render cursor at specified position', () => {
+    new SimpleEditor('test-container', {
+      text: [{ value: 'Hello World' }],
+      cursorPos: 6,
+    });
+
+    const editorDiv = container.querySelector('#simple-editor-container');
+    expect(editorDiv).toBeDefined();
+
+    // Find the cursor span
+    const cursorSpan = editorDiv?.querySelector('.simple-editor-cursor');
+    expect(cursorSpan).toBeDefined();
+    expect(cursorSpan?.textContent).toBe('W'); // Character at position 6 is 'W'
+    expect(cursorSpan?.classList.contains('simple-editor-cursor')).toBe(true);
+  });
+
+  it('should render text with bold mark', () => {
+    new SimpleEditor('test-container', {
+      text: [{ value: 'Bold Text', marks: ['bold'] }],
+    });
+
+    const editorDiv = container.querySelector('#simple-editor-container');
+    const span = editorDiv?.querySelector('span');
+    expect(span?.textContent).toBe('Bold Text');
+    expect(span?.style.fontWeight).toBe('bold');
+  });
+
+  it('should render text with italic mark', () => {
+    new SimpleEditor('test-container', {
+      text: [{ value: 'Italic Text', marks: ['italic'] }],
+    });
+
+    const editorDiv = container.querySelector('#simple-editor-container');
+    const span = editorDiv?.querySelector('span');
+    expect(span?.textContent).toBe('Italic Text');
+    expect(span?.style.fontStyle).toBe('italic');
+  });
+
+  it('should render text with underline mark', () => {
+    new SimpleEditor('test-container', {
+      text: [{ value: 'Underline Text', marks: ['underline'] }],
+    });
+
+    const editorDiv = container.querySelector('#simple-editor-container');
+    const span = editorDiv?.querySelector('span');
+    expect(span?.textContent).toBe('Underline Text');
+    expect(span?.style.textDecoration).toBe('underline');
+  });
+
+  it('should render text with multiple marks', () => {
+    new SimpleEditor('test-container', {
+      text: [{ value: 'Bold Italic', marks: ['bold', 'italic'] }],
+    });
+
+    const editorDiv = container.querySelector('#simple-editor-container');
+    const span = editorDiv?.querySelector('span');
+    expect(span?.textContent).toBe('Bold Italic');
+    expect(span?.style.fontWeight).toBe('bold');
+    expect(span?.style.fontStyle).toBe('italic');
+  });
+
+  it('should render text with newlines', () => {
+    new SimpleEditor('test-container', {
+      text: [{ value: 'Line 1\nLine 2\nLine 3' }],
+    });
+
+    const editorDiv = container.querySelector('#simple-editor-container');
+    expect(editorDiv).toBeDefined();
+
+    const spans = editorDiv?.querySelectorAll('span:not(.simple-editor-cursor)');
+    const brs = editorDiv?.querySelectorAll('br');
+
+    // Should have 3 spans (one for each line)
+    expect(spans?.length).toBe(3);
+    expect(spans?.[0]?.textContent).toBe('Line 1');
+    expect(spans?.[1]?.textContent).toBe('Line 2');
+    expect(spans?.[2]?.textContent).toBe('Line 3');
+
+    // Should have 2 br elements (between lines)
+    expect(brs?.length).toBe(2);
+  });
+
+  it('should render newlines with marks applied', () => {
+    new SimpleEditor('test-container', {
+      text: [{ value: 'Bold 1\nBold 2', marks: ['bold'] }],
+    });
+
+    const editorDiv = container.querySelector('#simple-editor-container');
+    const spans = editorDiv?.querySelectorAll('span:not(.simple-editor-cursor)');
+
+    // Each line should have bold applied
+    expect(spans?.[0]?.textContent).toBe('Bold 1');
+    expect((spans?.[0] as HTMLElement)?.style.fontWeight).toBe('bold');
+    expect(spans?.[1]?.textContent).toBe('Bold 2');
+    expect((spans?.[1] as HTMLElement)?.style.fontWeight).toBe('bold');
+  });
+
+  it('should render cursor with newlines', () => {
+    new SimpleEditor('test-container', {
+      text: [{ value: 'Hello\nWorld' }],
+      cursorPos: 8, // Position in "World" (H=0, e=1, l=2, l=3, o=4, \n=5, W=6, o=7, r=8)
+    });
+
+    const editorDiv = container.querySelector('#simple-editor-container');
+    expect(editorDiv).toBeDefined();
+
+    // Find the cursor span
+    const cursorSpan = editorDiv?.querySelector('.simple-editor-cursor');
+    expect(cursorSpan).toBeDefined();
+    expect(cursorSpan?.textContent).toBe('r'); // Character at position 8
+
+    // Verify there are br elements
+    const brs = editorDiv?.querySelectorAll('br');
+    expect(brs?.length).toBe(1);
+  });
+
+  it('should render cursor at end of line with newlines', () => {
+    new SimpleEditor('test-container', {
+      text: [{ value: 'Hello\nWorld\nTest' }],
+      cursorPos: 10, // Position at end of second line (H=0, e=1, l=2, l=3, o=4, \n=5, W=6, o=7, r=8, l=9, d=10)
+    });
+
+    const editorDiv = container.querySelector('#simple-editor-container');
+    const cursorSpan = editorDiv?.querySelector('.simple-editor-cursor');
+
+    // Cursor should show 'd', the last character of second line
+    expect(cursorSpan?.textContent).toBe('d');
+  });
+
+  it('should render cursor at beginning of line with newlines', () => {
+    new SimpleEditor('test-container', {
+      text: [{ value: 'Hello\nWorld\nTest' }],
+      cursorPos: 12, // Position at beginning of third line (after second \n)
+    });
+
+    const editorDiv = container.querySelector('#simple-editor-container');
+    const cursorSpan = editorDiv?.querySelector('.simple-editor-cursor');
+
+    // Cursor should show 'T', the first character of third line
+    expect(cursorSpan?.textContent).toBe('T');
+  });
+
+  it('should not allow cursor to be positioned on newline character', () => {
+    new SimpleEditor('test-container', {
+      text: [{ value: 'Hello\nWorld' }],
+      cursorPos: 5, // Position exactly on the newline character
+    });
+
+    const editorDiv = container.querySelector('#simple-editor-container');
+    const cursorSpan = editorDiv?.querySelector('.simple-editor-cursor');
+
+    // Cursor should not show the newline character - should show a space instead
+    expect(cursorSpan?.textContent).not.toBe('\n');
+    expect(cursorSpan?.textContent).toBe(' ');
+  });
+
+  it('should place cursor on first newline at end of current line, not next line', () => {
+    new SimpleEditor('test-container', {
+      text: [{ value: 'AB\n\nCD' }],
+      cursorPos: 2, // First \n
+    });
+
+    const editorDiv = container.querySelector('#simple-editor-container')!;
+    const children = Array.from(editorDiv.childNodes);
+
+    // Expected order: <span>AB</span>, <cursor ' '>, <br>, <br>, <span>CD</span>
+    // The cursor should appear at the end of the "AB" line,
+    // with the <br> for its newline coming AFTER the cursor
+    const cursorIndex = children.findIndex(
+      n => n instanceof HTMLElement && n.classList.contains('simple-editor-cursor')
+    );
+    const firstBrAfterCursor = children.findIndex(
+      (n, i) => i > cursorIndex && n.nodeName === 'BR'
+    );
+
+    expect(cursorIndex).toBeGreaterThan(-1);
+    expect(firstBrAfterCursor).toBeGreaterThan(cursorIndex);
+  });
+
+  it('should place cursor on second newline on the blank line', () => {
+    new SimpleEditor('test-container', {
+      text: [{ value: 'AB\n\nCD' }],
+      cursorPos: 3, // Second \n
+    });
+
+    const editorDiv = container.querySelector('#simple-editor-container')!;
+    const children = Array.from(editorDiv.childNodes);
+
+    // Expected order: <span>AB</span>, <br>, <cursor ' '>, <br>, <span>CD</span>
+    // The first <br> puts us on the blank line, cursor appears there,
+    // then the second <br> pushes CD to the next line
+    const cursorIndex = children.findIndex(
+      n => n instanceof HTMLElement && n.classList.contains('simple-editor-cursor')
+    );
+
+    // There should be a <br> before the cursor (from the first \n in beforeText)
+    const brBeforeCursor = children.findIndex(
+      (n, i) => i < cursorIndex && n.nodeName === 'BR'
+    );
+    // There should be a <br> after the cursor (from the cursor's own newline)
+    const brAfterCursor = children.findIndex(
+      (n, i) => i > cursorIndex && n.nodeName === 'BR'
+    );
+
+    expect(brBeforeCursor).toBeGreaterThan(-1);
+    expect(cursorIndex).toBeGreaterThan(brBeforeCursor);
+    expect(brAfterCursor).toBeGreaterThan(cursorIndex);
+  });
+
+  it('should place cursor on first char of next node at node boundary', () => {
+    new SimpleEditor('test-container', {
+      text: [
+        { value: 'AB' },
+        { value: '\n\n' },
+        { value: 'CD' },
+      ],
+      cursorPos: 4, // Should be 'C' (A=0, B=1, \n=2, \n=3, C=4)
+    });
+
+    const editorDiv = container.querySelector('#simple-editor-container');
+    const cursorSpan = editorDiv?.querySelector('.simple-editor-cursor');
+
+    // Cursor should be on 'C', not a space from the end of the '\n\n' node
+    expect(cursorSpan?.textContent).toBe('C');
+  });
+});

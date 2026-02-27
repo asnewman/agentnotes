@@ -9,9 +9,14 @@
     "build": "tsc",
     "typecheck": "tsc --noEmit",
     "dev": "tsc --watch",
-    "demo": "node demo/server.js"
+    "demo": "node demo/server.js",
+    "test": "vitest",
+    "test:ui": "vitest --ui"
   },
   "devDependencies": {
-    "typescript": "^5.3.3"
+    "@vitest/ui": "^4.0.18",
+    "jsdom": "^28.1.0",
+    "typescript": "^5.3.3",
+    "vitest": "^4.0.18"
   }
 }

@@ -12,19 +12,14 @@ export interface SimpleEditorOptions {
 }
 
 const CURSOR_BLINK_STYLE = `
-  @keyframes blink {
-    0%, 49% { opacity: 1; }
-    50%, 100% { opacity: 0; }
+  #simple-editor-container {
+    font-family: monospace;
   }
   .simple-editor-cursor {
-    display: inline-block;
-    width: 2px;
-    height: 1em;
     background-color: #000;
-    animation: blink 1s infinite;
-    position: relative;
-    left: -2px;
-    margin-right: -2px;
+    color: #fff;
+    padding: 0 1px;
+    white-space: pre;
   }
 `;
 
@@ -87,15 +82,18 @@ export class SimpleEditor {
     }
   }
 
-  private createCursor(): HTMLSpanElement {
+  private createCursor(character: string = ' ', marks?: Mark[], size?: string): HTMLSpanElement {
     const cursor = document.createElement('span');
     cursor.className = 'simple-editor-cursor';
+    cursor.textContent = character;
+    this.applyTextNodeStyling(cursor, marks, size);
     return cursor;
   }
 
   private render(): void {
     this.container.innerHTML = '';
     const div = document.createElement('div');
+    div.id = 'simple-editor-container';
 
     // Calculate total text length
     const totalLength = this.options.text.reduce((sum, node) => sum + node.value.length, 0);
@@ -110,13 +108,21 @@ export class SimpleEditor {
         const nodeStart = offset;
         const nodeEnd = offset + node.value.length;
 
-        if (!cursorInserted && pos >= nodeStart && pos <= nodeEnd) {
+        if (!cursorInserted && pos >= nodeStart && (pos < nodeEnd || nodeEnd === totalLength)) {
           // This node contains the cursor
           const beforeText = node.value.substring(0, pos - nodeStart);
-          const afterText = node.value.substring(pos - nodeStart);
+          const rawCursorChar = node.value.charAt(pos - nodeStart);
+          const isNewline = rawCursorChar === '\n';
+          // Display space for newlines and empty positions (newline positions can occur naturally during navigation)
+          const cursorChar = (!rawCursorChar || isNewline) ? ' ' : rawCursorChar;
+          const afterText = node.value.substring(pos - nodeStart + 1);
 
           this.renderTextWithNewlines(div, beforeText, node.marks, node.size);
-          div.appendChild(this.createCursor());
+          div.appendChild(this.createCursor(cursorChar, node.marks, node.size));
+          // Preserve the line break when cursor is on a newline character
+          if (isNewline) {
+            div.appendChild(document.createElement('br'));
+          }
           this.renderTextWithNewlines(div, afterText, node.marks, node.size);
 
           cursorInserted = true;
