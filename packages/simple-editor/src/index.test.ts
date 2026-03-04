@@ -240,6 +240,54 @@ describe('SimpleEditor - Text Rendering', () => {
     expect(brAfterCursor).toBeGreaterThan(cursorIndex);
   });
 
+  it('should render cursor at end of text after newline with default font size', () => {
+    new SimpleEditor('test-container', {
+      text: [{ value: 'Hello', size: '32px' }, { value: '\n' }],
+      cursorPos: 6, // Past all text, on the empty new line
+    });
+
+    const editorDiv = container.querySelector('#simple-editor-container');
+    const cursorSpan = editorDiv?.querySelector('.simple-editor-cursor') as HTMLElement;
+
+    expect(cursorSpan).toBeDefined();
+    expect(cursorSpan?.textContent).toBe(' ');
+    // Cursor on a blank line after a newline should use default size to avoid layout shifts
+    expect(cursorSpan?.style.fontSize).toBe('');
+  });
+
+  it('should render cursor on newline character with previous character font size when in different node', () => {
+    new SimpleEditor('test-container', {
+      text: [
+        { value: 'Big', size: '32px' },
+        { value: '\nSmall', size: '16px' },
+      ],
+      cursorPos: 3, // On the \n character between nodes
+    });
+
+    const editorDiv = container.querySelector('#simple-editor-container');
+    const cursorSpan = editorDiv?.querySelector('.simple-editor-cursor') as HTMLElement;
+
+    expect(cursorSpan).toBeDefined();
+    expect(cursorSpan?.textContent).toBe(' ');
+    // Cursor at end of "Big" line should have 32px, not 16px from the next node
+    expect(cursorSpan?.style.fontSize).toBe('32px');
+  });
+
+  it('should render cursor on newline with font size from same node', () => {
+    new SimpleEditor('test-container', {
+      text: [{ value: 'Hello\n', size: '24px' }],
+      cursorPos: 5, // On the \n within the same node
+    });
+
+    const editorDiv = container.querySelector('#simple-editor-container');
+    const cursorSpan = editorDiv?.querySelector('.simple-editor-cursor') as HTMLElement;
+
+    expect(cursorSpan).toBeDefined();
+    expect(cursorSpan?.textContent).toBe(' ');
+    // Same node, so font size should already be correct
+    expect(cursorSpan?.style.fontSize).toBe('24px');
+  });
+
   it('should place cursor on first char of next node at node boundary', () => {
     new SimpleEditor('test-container', {
       text: [

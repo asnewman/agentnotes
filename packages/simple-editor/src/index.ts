@@ -18,8 +18,8 @@ const CURSOR_BLINK_STYLE = `
   .simple-editor-cursor {
     background-color: #000;
     color: #fff;
-    padding: 0 1px;
-    white-space: pre;
+    padding: 0;
+    white-space: pre-wrap;
   }
 `;
 
@@ -82,6 +82,24 @@ export class SimpleEditor {
     }
   }
 
+  private findPreviousCharSize(pos: number): string | undefined {
+    const p = pos - 1;
+    if (p < 0) return undefined;
+
+    let searchOffset = 0;
+    for (const n of this.options.text) {
+      const nEnd = searchOffset + n.value.length;
+      if (p >= searchOffset && p < nEnd) {
+        if (n.value[p - searchOffset] !== '\n') {
+          return n.size;
+        }
+        return undefined;
+      }
+      searchOffset = nEnd;
+    }
+    return undefined;
+  }
+
   private createCursor(character: string = ' ', marks?: Mark[], size?: string): HTMLSpanElement {
     const cursor = document.createElement('span');
     cursor.className = 'simple-editor-cursor';
@@ -117,8 +135,14 @@ export class SimpleEditor {
           const cursorChar = (!rawCursorChar || isNewline) ? ' ' : rawCursorChar;
           const afterText = node.value.substring(pos - nodeStart + 1);
 
+          // For newlines/end-of-text, inherit font size from the previous non-newline character
+          let cursorSize = node.size;
+          if (!rawCursorChar || isNewline) {
+            cursorSize = this.findPreviousCharSize(pos);
+          }
+
           this.renderTextWithNewlines(div, beforeText, node.marks, node.size);
-          div.appendChild(this.createCursor(cursorChar, node.marks, node.size));
+          div.appendChild(this.createCursor(cursorChar, node.marks, cursorSize));
           // Preserve the line break when cursor is on a newline character
           if (isNewline) {
             div.appendChild(document.createElement('br'));
