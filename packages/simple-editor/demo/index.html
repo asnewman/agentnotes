@@ -48,23 +48,25 @@
     import { SimpleEditor } from '../dist/index.js';
 
     // Track state in local variables
-    let text = [
-      { value: 'Introduction to SimpleEditor', marks: ['bold'], size: '24px' },
-      { value: '\n\n', marks: [] },
-      { value: 'SimpleEditor is a lightweight text editor with support for rich text styling. It provides an example of how to build a custom editor with marks and size properties.\n\n', marks: [] },
-      { value: 'Key Features', marks: ['bold'], size: '18px' },
-      { value: '\n\n', marks: [] },
-      { value: 'Bold text support', marks: ['bold'] },
-      { value: ' - use the marks property\n', marks: [] },
-      { value: 'Italic text support', marks: ['italic'] },
-      { value: ' - combine with other marks\n', marks: [] },
-      { value: 'Custom font sizes', marks: [] },
-      { value: ' - set via the size property\n', marks: [] },
-      { value: 'Cursor positioning', marks: ['bold'] },
-      { value: ' - navigate through text\n\n', marks: [] },
-      { value: 'Getting Started', marks: ['bold'], size: '18px' },
-      { value: '\n\n', marks: [] },
-      { value: 'Edit the text above or use the controls below to update the editor content and cursor position.', marks: ['italic'] }
+    let content = [
+      { type: 'text', value: 'Introduction to SimpleEditor', marks: ['bold'], size: '24px' },
+      { type: 'text', value: '\n\n', marks: [] },
+      { type: 'text', value: 'SimpleEditor is a lightweight text editor with support for rich text styling. It provides an example of how to build a custom editor with marks and size properties.\n\n', marks: [] },
+      { type: 'image', src: 'https://picsum.photos/800/400' },
+      { type: 'text', value: '\n', marks: [] },
+      { type: 'text', value: 'Key Features', marks: ['bold'], size: '18px' },
+      { type: 'text', value: '\n\n', marks: [] },
+      { type: 'text', value: 'Bold text support', marks: ['bold'] },
+      { type: 'text', value: ' - use the marks property\n', marks: [] },
+      { type: 'text', value: 'Italic text support', marks: ['italic'] },
+      { type: 'text', value: ' - combine with other marks\n', marks: [] },
+      { type: 'text', value: 'Custom font sizes', marks: [] },
+      { type: 'text', value: ' - set via the size property\n', marks: [] },
+      { type: 'text', value: 'Cursor positioning', marks: ['bold'] },
+      { type: 'text', value: ' - navigate through text\n\n', marks: [] },
+      { type: 'text', value: 'Getting Started', marks: ['bold'], size: '18px' },
+      { type: 'text', value: '\n\n', marks: [] },
+      { type: 'text', value: 'Edit the text above or use the controls below to update the editor content and cursor position.', marks: ['italic'] }
     ];
     let cursorPos = 0;
 
@@ -77,7 +79,7 @@
 
     // Helper to clear container and recreate editor
     function rerender() {
-      new SimpleEditor('editor-container', { text, cursorPos });
+      new SimpleEditor('editor-container', { content, cursorPos });
     }
 
     // Initial render
@@ -86,9 +88,9 @@
     // Update text
     updateBtn.addEventListener('click', () => {
       if (textInput.value) {
-        text = [{ value: textInput.value, marks: [] }];
+        content = [{ type: 'text', value: textInput.value, marks: [] }];
         // Clamp cursor to new text length
-        const totalLength = text.reduce((sum, n) => sum + n.value.length, 0);
+        const totalLength = content.reduce((sum, n) => sum + (n.type === 'text' ? n.value.length : 0), 0);
         cursorPos = Math.min(cursorPos, totalLength);
         cursorPosInput.value = cursorPos;
         textInput.value = '';
@@ -111,7 +113,7 @@
 
     // Move cursor right
     cursorNextBtn.addEventListener('click', () => {
-      const totalLength = text.reduce((sum, n) => sum + n.value.length, 0);
+      const totalLength = content.reduce((sum, n) => sum + (n.type === 'text' ? n.value.length : 0), 0);
       cursorPos = Math.min(totalLength, cursorPos + 1);
       cursorPosInput.value = cursorPos;
       rerender();

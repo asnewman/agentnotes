@@ -1,13 +1,25 @@
 export type Mark = 'bold' | 'italic' | 'underline';
 
 export interface TextNode {
+  type: 'text';
   value: string;
   marks?: Mark[];
   size?: string;
 }
 
+export interface ImageNode {
+  type: 'image';
+  src: string;
+}
+
+export type Node = TextNode | ImageNode;
+
+function isTextNode(node: Node): node is TextNode {
+  return node.type === 'text';
+}
+
 export interface SimpleEditorOptions {
-  text: TextNode[];
+  content: Node[];
   cursorPos?: number;
 }
 
@@ -82,12 +94,22 @@ export class SimpleEditor {
     }
   }
 
+  private renderImageNode(container: HTMLElement, node: ImageNode): void {
+    const img = document.createElement('img');
+    img.src = node.src;
+    img.style.width = '500px';
+    img.style.display = 'block';
+    img.style.margin = '0 auto';
+    container.appendChild(img);
+  }
+
   private findPreviousCharSize(pos: number): string | undefined {
     const p = pos - 1;
     if (p < 0) return undefined;
 
     let searchOffset = 0;
-    for (const n of this.options.text) {
+    for (const n of this.options.content) {
+      if (!isTextNode(n)) continue;
       const nEnd = searchOffset + n.value.length;
       if (p >= searchOffset && p < nEnd) {
         if (n.value[p - searchOffset] !== '\n') {
@@ -113,8 +135,10 @@ export class SimpleEditor {
     const div = document.createElement('div');
     div.id = 'simple-editor-container';
 
-    // Calculate total text length
-    const totalLength = this.options.text.reduce((sum, node) => sum + node.value.length, 0);
+    // Calculate total text length (image nodes contribute 0)
+    const totalLength = this.options.content.reduce((sum, node) => {
+      return sum + (isTextNode(node) ? node.value.length : 0);
+    }, 0);
 
     // If cursor position is specified, render text with cursor
     if (this.options.cursorPos !== undefined && this.options.cursorPos >= 0) {
@@ -122,7 +146,12 @@ export class SimpleEditor {
       let offset = 0;
       let cursorInserted = false;
 
-      for (const node of this.options.text) {
+      for (const node of this.options.content) {
+        if (!isTextNode(node)) {
+          this.renderImageNode(div, node);
+          continue;
+        }
+
         const nodeStart = offset;
         const nodeEnd = offset + node.value.length;
 
@@ -159,7 +188,11 @@ export class SimpleEditor {
       }
     } else {
       // No cursor, just render all nodes
-      for (const node of this.options.text) {
+      for (const node of this.options.content) {
+        if (!isTextNode(node)) {
+          this.renderImageNode(div, node);
+          continue;
+        }
         this.renderTextWithNewlines(div, node.value, node.marks, node.size);
       }
     }

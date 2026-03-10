@@ -16,7 +16,7 @@ describe('SimpleEditor - Text Rendering', () => {
 
   it('should render plain text with no marks, newlines, or sizes', () => {
     new SimpleEditor('test-container', {
-      text: [{ value: 'Hello World' }],
+      content: [{ type: 'text', value: 'Hello World' }],
     });
 
     const editorDiv = container.querySelector('#simple-editor-container');
@@ -33,7 +33,7 @@ describe('SimpleEditor - Text Rendering', () => {
 
   it('should render cursor at specified position', () => {
     new SimpleEditor('test-container', {
-      text: [{ value: 'Hello World' }],
+      content: [{ type: 'text', value: 'Hello World' }],
       cursorPos: 6,
     });
 
@@ -49,7 +49,7 @@ describe('SimpleEditor - Text Rendering', () => {
 
   it('should render text with bold mark', () => {
     new SimpleEditor('test-container', {
-      text: [{ value: 'Bold Text', marks: ['bold'] }],
+      content: [{ type: 'text', value: 'Bold Text', marks: ['bold'] }],
     });
 
     const editorDiv = container.querySelector('#simple-editor-container');
@@ -60,7 +60,7 @@ describe('SimpleEditor - Text Rendering', () => {
 
   it('should render text with italic mark', () => {
     new SimpleEditor('test-container', {
-      text: [{ value: 'Italic Text', marks: ['italic'] }],
+      content: [{ type: 'text', value: 'Italic Text', marks: ['italic'] }],
     });
 
     const editorDiv = container.querySelector('#simple-editor-container');
@@ -71,7 +71,7 @@ describe('SimpleEditor - Text Rendering', () => {
 
   it('should render text with underline mark', () => {
     new SimpleEditor('test-container', {
-      text: [{ value: 'Underline Text', marks: ['underline'] }],
+      content: [{ type: 'text', value: 'Underline Text', marks: ['underline'] }],
     });
 
     const editorDiv = container.querySelector('#simple-editor-container');
@@ -82,7 +82,7 @@ describe('SimpleEditor - Text Rendering', () => {
 
   it('should render text with multiple marks', () => {
     new SimpleEditor('test-container', {
-      text: [{ value: 'Bold Italic', marks: ['bold', 'italic'] }],
+      content: [{ type: 'text', value: 'Bold Italic', marks: ['bold', 'italic'] }],
     });
 
     const editorDiv = container.querySelector('#simple-editor-container');
@@ -94,7 +94,7 @@ describe('SimpleEditor - Text Rendering', () => {
 
   it('should render text with newlines', () => {
     new SimpleEditor('test-container', {
-      text: [{ value: 'Line 1\nLine 2\nLine 3' }],
+      content: [{ type: 'text', value: 'Line 1\nLine 2\nLine 3' }],
     });
 
     const editorDiv = container.querySelector('#simple-editor-container');
@@ -115,7 +115,7 @@ describe('SimpleEditor - Text Rendering', () => {
 
   it('should render newlines with marks applied', () => {
     new SimpleEditor('test-container', {
-      text: [{ value: 'Bold 1\nBold 2', marks: ['bold'] }],
+      content: [{ type: 'text', value: 'Bold 1\nBold 2', marks: ['bold'] }],
     });
 
     const editorDiv = container.querySelector('#simple-editor-container');
@@ -130,7 +130,7 @@ describe('SimpleEditor - Text Rendering', () => {
 
   it('should render cursor with newlines', () => {
     new SimpleEditor('test-container', {
-      text: [{ value: 'Hello\nWorld' }],
+      content: [{ type: 'text', value: 'Hello\nWorld' }],
       cursorPos: 8, // Position in "World" (H=0, e=1, l=2, l=3, o=4, \n=5, W=6, o=7, r=8)
     });
 
@@ -149,7 +149,7 @@ describe('SimpleEditor - Text Rendering', () => {
 
   it('should render cursor at end of line with newlines', () => {
     new SimpleEditor('test-container', {
-      text: [{ value: 'Hello\nWorld\nTest' }],
+      content: [{ type: 'text', value: 'Hello\nWorld\nTest' }],
       cursorPos: 10, // Position at end of second line (H=0, e=1, l=2, l=3, o=4, \n=5, W=6, o=7, r=8, l=9, d=10)
     });
 
@@ -162,7 +162,7 @@ describe('SimpleEditor - Text Rendering', () => {
 
   it('should render cursor at beginning of line with newlines', () => {
     new SimpleEditor('test-container', {
-      text: [{ value: 'Hello\nWorld\nTest' }],
+      content: [{ type: 'text', value: 'Hello\nWorld\nTest' }],
       cursorPos: 12, // Position at beginning of third line (after second \n)
     });
 
@@ -175,7 +175,7 @@ describe('SimpleEditor - Text Rendering', () => {
 
   it('should not allow cursor to be positioned on newline character', () => {
     new SimpleEditor('test-container', {
-      text: [{ value: 'Hello\nWorld' }],
+      content: [{ type: 'text', value: 'Hello\nWorld' }],
       cursorPos: 5, // Position exactly on the newline character
     });
 
@@ -189,7 +189,7 @@ describe('SimpleEditor - Text Rendering', () => {
 
   it('should place cursor on first newline at end of current line, not next line', () => {
     new SimpleEditor('test-container', {
-      text: [{ value: 'AB\n\nCD' }],
+      content: [{ type: 'text', value: 'AB\n\nCD' }],
       cursorPos: 2, // First \n
     });
 
@@ -212,7 +212,7 @@ describe('SimpleEditor - Text Rendering', () => {
 
   it('should place cursor on second newline on the blank line', () => {
     new SimpleEditor('test-container', {
-      text: [{ value: 'AB\n\nCD' }],
+      content: [{ type: 'text', value: 'AB\n\nCD' }],
       cursorPos: 3, // Second \n
     });
 
@@ -242,7 +242,7 @@ describe('SimpleEditor - Text Rendering', () => {
 
   it('should render cursor at end of text after newline with default font size', () => {
     new SimpleEditor('test-container', {
-      text: [{ value: 'Hello', size: '32px' }, { value: '\n' }],
+      content: [{ type: 'text', value: 'Hello', size: '32px' }, { type: 'text', value: '\n' }],
       cursorPos: 6, // Past all text, on the empty new line
     });
 
@@ -257,9 +257,9 @@ describe('SimpleEditor - Text Rendering', () => {
 
   it('should render cursor on newline character with previous character font size when in different node', () => {
     new SimpleEditor('test-container', {
-      text: [
-        { value: 'Big', size: '32px' },
-        { value: '\nSmall', size: '16px' },
+      content: [
+        { type: 'text', value: 'Big', size: '32px' },
+        { type: 'text', value: '\nSmall', size: '16px' },
       ],
       cursorPos: 3, // On the \n character between nodes
     });
@@ -275,7 +275,7 @@ describe('SimpleEditor - Text Rendering', () => {
 
   it('should render cursor on newline with font size from same node', () => {
     new SimpleEditor('test-container', {
-      text: [{ value: 'Hello\n', size: '24px' }],
+      content: [{ type: 'text', value: 'Hello\n', size: '24px' }],
       cursorPos: 5, // On the \n within the same node
     });
 
@@ -290,10 +290,10 @@ describe('SimpleEditor - Text Rendering', () => {
 
   it('should place cursor on first char of next node at node boundary', () => {
     new SimpleEditor('test-container', {
-      text: [
-        { value: 'AB' },
-        { value: '\n\n' },
-        { value: 'CD' },
+      content: [
+        { type: 'text', value: 'AB' },
+        { type: 'text', value: '\n\n' },
+        { type: 'text', value: 'CD' },
       ],
       cursorPos: 4, // Should be 'C' (A=0, B=1, \n=2, \n=3, C=4)
     });
@@ -303,5 +303,114 @@ describe('SimpleEditor - Text Rendering', () => {
 
     // Cursor should be on 'C', not a space from the end of the '\n\n' node
     expect(cursorSpan?.textContent).toBe('C');
+  });
+});
+
+describe('SimpleEditor - Image Rendering', () => {
+  let container: HTMLDivElement;
+
+  beforeEach(() => {
+    container = document.createElement('div');
+    container.id = 'test-container';
+    document.body.appendChild(container);
+  });
+
+  afterEach(() => {
+    document.body.removeChild(container);
+  });
+
+  it('should render an image node as an img element', () => {
+    new SimpleEditor('test-container', {
+      content: [{ type: 'image', src: 'https://example.com/photo.jpg' }],
+    });
+
+    const editorDiv = container.querySelector('#simple-editor-container');
+    const img = editorDiv?.querySelector('img') as HTMLImageElement;
+
+    expect(img).toBeDefined();
+    expect(img?.src).toBe('https://example.com/photo.jpg');
+    expect(img?.style.width).toBe('500px');
+    expect(img?.style.display).toBe('block');
+    expect(img?.style.margin).toBe('0px auto');
+  });
+
+  it('should not affect cursor positioning with image nodes', () => {
+    new SimpleEditor('test-container', {
+      content: [
+        { type: 'text', value: 'Hello' },
+        { type: 'image', src: 'https://example.com/photo.jpg' },
+        { type: 'text', value: 'World' },
+      ],
+      cursorPos: 5, // Should be 'W' in "World" (image contributes 0 length)
+    });
+
+    const editorDiv = container.querySelector('#simple-editor-container');
+    const cursorSpan = editorDiv?.querySelector('.simple-editor-cursor');
+
+    expect(cursorSpan?.textContent).toBe('W');
+  });
+
+  it('should render images in correct order between text nodes', () => {
+    new SimpleEditor('test-container', {
+      content: [
+        { type: 'text', value: 'Before' },
+        { type: 'image', src: 'https://example.com/photo.jpg' },
+        { type: 'text', value: 'After' },
+      ],
+    });
+
+    const editorDiv = container.querySelector('#simple-editor-container')!;
+    const children = Array.from(editorDiv.childNodes);
+
+    // Find the img element
+    const imgIndex = children.findIndex(n => n.nodeName === 'IMG');
+    expect(imgIndex).toBeGreaterThan(-1);
+
+    // Text "Before" should be before the image
+    const beforeSpan = children.find(
+      (n, i) => i < imgIndex && n instanceof HTMLElement && n.textContent === 'Before'
+    );
+    expect(beforeSpan).toBeDefined();
+
+    // Text "After" should be after the image
+    const afterSpan = children.find(
+      (n, i) => i > imgIndex && n instanceof HTMLElement && n.textContent === 'After'
+    );
+    expect(afterSpan).toBeDefined();
+  });
+
+  it('should render multiple image nodes', () => {
+    new SimpleEditor('test-container', {
+      content: [
+        { type: 'image', src: 'https://example.com/one.jpg' },
+        { type: 'image', src: 'https://example.com/two.jpg' },
+      ],
+    });
+
+    const editorDiv = container.querySelector('#simple-editor-container');
+    const imgs = editorDiv?.querySelectorAll('img');
+
+    expect(imgs?.length).toBe(2);
+    expect((imgs?.[0] as HTMLImageElement)?.src).toBe('https://example.com/one.jpg');
+    expect((imgs?.[1] as HTMLImageElement)?.src).toBe('https://example.com/two.jpg');
+  });
+
+  it('should inherit font size across image nodes for cursor', () => {
+    new SimpleEditor('test-container', {
+      content: [
+        { type: 'text', value: 'Big', size: '32px' },
+        { type: 'image', src: 'https://example.com/photo.jpg' },
+        { type: 'text', value: '\nSmall', size: '16px' },
+      ],
+      cursorPos: 3, // On the \n character in the third node
+    });
+
+    const editorDiv = container.querySelector('#simple-editor-container');
+    const cursorSpan = editorDiv?.querySelector('.simple-editor-cursor') as HTMLElement;
+
+    expect(cursorSpan).toBeDefined();
+    expect(cursorSpan?.textContent).toBe(' ');
+    // Should inherit 32px from "Big" node, skipping the image node
+    expect(cursorSpan?.style.fontSize).toBe('32px');
   });
 });

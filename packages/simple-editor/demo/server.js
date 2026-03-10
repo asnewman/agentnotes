@@ -5,7 +5,8 @@ import { fileURLToPath } from 'url';
 
 const demoDir = path.dirname(fileURLToPath(import.meta.url));
 const packageRoot = path.dirname(demoDir);
-const PORT = 3000;
+const portArg = process.argv.filter(a => a !== '--').slice(2)[0];
+const PORT = parseInt(portArg, 10) || 3000;
 
 const server = http.createServer((req, res) => {
   // Serve from package root, default to demo/index.html
