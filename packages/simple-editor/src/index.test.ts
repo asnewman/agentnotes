@@ -1,6 +1,14 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { SimpleEditor } from './index';
 
+describe('SimpleEditor - Constructor', () => {
+  it('throws when container element is not found', () => {
+    expect(() => {
+      new SimpleEditor('nonexistent-id', { content: [] });
+    }).toThrow('Container element not found: nonexistent-id');
+  });
+});
+
 describe('SimpleEditor - Text Rendering', () => {
   let container: HTMLDivElement;
 
@@ -303,6 +311,50 @@ describe('SimpleEditor - Text Rendering', () => {
 
     // Cursor should be on 'C', not a space from the end of the '\n\n' node
     expect(cursorSpan?.textContent).toBe('C');
+  });
+});
+
+describe('SimpleEditor - findPreviousCharSize edge cases', () => {
+  let container: HTMLDivElement;
+
+  beforeEach(() => {
+    container = document.createElement('div');
+    container.id = 'test-container';
+    document.body.appendChild(container);
+  });
+
+  afterEach(() => {
+    document.body.removeChild(container);
+  });
+
+  it('handles cursor at position 0 on a newline character', () => {
+    new SimpleEditor('test-container', {
+      content: [{ type: 'text', value: '\nHello' }],
+      cursorPos: 0,
+    });
+
+    const editorDiv = container.querySelector('#simple-editor-container');
+    const cursorSpan = editorDiv?.querySelector('.simple-editor-cursor') as HTMLElement;
+    expect(cursorSpan).toBeDefined();
+    expect(cursorSpan?.textContent).toBe(' ');
+    // No previous character, so no inherited size
+    expect(cursorSpan?.style.fontSize).toBe('');
+  });
+
+  it('skips image nodes when looking up previous char size', () => {
+    new SimpleEditor('test-container', {
+      content: [
+        { type: 'text', value: 'AB', size: '24px' },
+        { type: 'image', src: 'img.png' },
+        { type: 'text', value: 'CD\n' },
+      ],
+      cursorPos: 4, // On the '\n' in 'CD\n'
+    });
+
+    const editorDiv = container.querySelector('#simple-editor-container');
+    const cursorSpan = editorDiv?.querySelector('.simple-editor-cursor') as HTMLElement;
+    expect(cursorSpan).toBeDefined();
+    expect(cursorSpan?.textContent).toBe(' ');
   });
 });
 

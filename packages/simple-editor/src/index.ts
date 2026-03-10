@@ -1,26 +1,10 @@
-export type Mark = 'bold' | 'italic' | 'underline';
-
-export interface TextNode {
-  type: 'text';
-  value: string;
-  marks?: Mark[];
-  size?: string;
-}
-
-export interface ImageNode {
-  type: 'image';
-  src: string;
-}
-
-export type Node = TextNode | ImageNode;
+export type { Mark, TextNode, ImageNode, Node, SimpleEditorOptions } from './types.js';
+import type { Mark, TextNode, ImageNode, Node, SimpleEditorOptions } from './types.js';
+export { Engine } from './engine.js';
+export type { EditorState, Action, EngineOptions } from './engine.js';
 
 function isTextNode(node: Node): node is TextNode {
   return node.type === 'text';
-}
-
-export interface SimpleEditorOptions {
-  content: Node[];
-  cursorPos?: number;
 }
 
 const CURSOR_BLINK_STYLE = `
@@ -63,15 +47,13 @@ export class SimpleEditor {
 
   private applyTextNodeStyling(el: HTMLSpanElement, marks?: Mark[], size?: string): void {
     if (marks && marks.length > 0) {
-      marks.forEach(mark => {
-        if (mark === 'bold') {
-          el.style.fontWeight = 'bold';
-        } else if (mark === 'italic') {
-          el.style.fontStyle = 'italic';
-        } else if (mark === 'underline') {
-          el.style.textDecoration = 'underline';
+      for (const mark of marks) {
+        switch (mark) {
+          case 'bold': el.style.fontWeight = 'bold'; break;
+          case 'italic': el.style.fontStyle = 'italic'; break;
+          case 'underline': el.style.textDecoration = 'underline'; break;
         }
-      });
+      }
     }
 
     if (size) {
@@ -108,18 +90,19 @@ export class SimpleEditor {
     if (p < 0) return undefined;
 
     let searchOffset = 0;
+    let result: string | undefined;
     for (const n of this.options.content) {
       if (!isTextNode(n)) continue;
       const nEnd = searchOffset + n.value.length;
       if (p >= searchOffset && p < nEnd) {
         if (n.value[p - searchOffset] !== '\n') {
-          return n.size;
+          result = n.size;
         }
-        return undefined;
+        break;
       }
       searchOffset = nEnd;
     }
-    return undefined;
+    return result;
   }
 
   private createCursor(character: string = ' ', marks?: Mark[], size?: string): HTMLSpanElement {
