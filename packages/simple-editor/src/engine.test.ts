@@ -322,6 +322,76 @@ describe('Engine cursor movement', () => {
     expect(onChange).toHaveBeenCalledTimes(1);
     expect(onSave).not.toHaveBeenCalled();
   });
+
+  // ─── Up / Down ───
+
+  it('MOVE_CURSOR_UP moves to same column on previous line', () => {
+    const engine = new Engine({ text: 'hello\nworld', cursorPos: 8 }); // "wor|ld"
+    engine.dispatch({ type: 'MOVE_CURSOR_UP' });
+    expect(engine.getState().cursorPos).toBe(2); // "he|llo"
+  });
+
+  it('MOVE_CURSOR_UP clamps to shorter previous line', () => {
+    const engine = new Engine({ text: 'ab\nhello', cursorPos: 7 }); // "hell|o"
+    engine.dispatch({ type: 'MOVE_CURSOR_UP' });
+    expect(engine.getState().cursorPos).toBe(2); // "ab|" (clamped to line length)
+  });
+
+  it('MOVE_CURSOR_UP on first line is a no-op', () => {
+    const engine = new Engine({ text: 'hello\nworld', cursorPos: 3 });
+    engine.dispatch({ type: 'MOVE_CURSOR_UP' });
+    expect(engine.getState().cursorPos).toBe(3);
+  });
+
+  it('MOVE_CURSOR_DOWN moves to same column on next line', () => {
+    const engine = new Engine({ text: 'hello\nworld', cursorPos: 2 }); // "he|llo"
+    engine.dispatch({ type: 'MOVE_CURSOR_DOWN' });
+    expect(engine.getState().cursorPos).toBe(8); // "wo|rld"
+  });
+
+  it('MOVE_CURSOR_DOWN clamps to shorter next line', () => {
+    const engine = new Engine({ text: 'hello\nab', cursorPos: 4 }); // "hell|o"
+    engine.dispatch({ type: 'MOVE_CURSOR_DOWN' });
+    expect(engine.getState().cursorPos).toBe(8); // "ab|" (clamped to line length)
+  });
+
+  it('MOVE_CURSOR_DOWN on last line is a no-op', () => {
+    const engine = new Engine({ text: 'hello\nworld', cursorPos: 8 });
+    engine.dispatch({ type: 'MOVE_CURSOR_DOWN' });
+    expect(engine.getState().cursorPos).toBe(8);
+  });
+
+  it('MOVE_CURSOR_UP then DOWN returns to original position on equal-length lines', () => {
+    const engine = new Engine({ text: 'abcde\nfghij', cursorPos: 8 }); // col 2 of line 1
+    engine.dispatch({ type: 'MOVE_CURSOR_UP' });
+    expect(engine.getState().cursorPos).toBe(2);
+    engine.dispatch({ type: 'MOVE_CURSOR_DOWN' });
+    expect(engine.getState().cursorPos).toBe(8);
+  });
+
+  it('MOVE_CURSOR_DOWN across multiple lines', () => {
+    const engine = new Engine({ text: 'aaa\nbbb\nccc', cursorPos: 1 }); // col 1, line 0
+    engine.dispatch({ type: 'MOVE_CURSOR_DOWN' });
+    expect(engine.getState().cursorPos).toBe(5); // col 1, line 1
+    engine.dispatch({ type: 'MOVE_CURSOR_DOWN' });
+    expect(engine.getState().cursorPos).toBe(9); // col 1, line 2
+  });
+
+  it('MOVE_CURSOR_UP across multiple lines', () => {
+    const engine = new Engine({ text: 'aaa\nbbb\nccc', cursorPos: 9 }); // col 1, line 2
+    engine.dispatch({ type: 'MOVE_CURSOR_UP' });
+    expect(engine.getState().cursorPos).toBe(5); // col 1, line 1
+    engine.dispatch({ type: 'MOVE_CURSOR_UP' });
+    expect(engine.getState().cursorPos).toBe(1); // col 1, line 0
+  });
+
+  it('MOVE_CURSOR_UP/DOWN with empty lines', () => {
+    const engine = new Engine({ text: 'hello\n\nworld', cursorPos: 3 }); // "hel|lo"
+    engine.dispatch({ type: 'MOVE_CURSOR_DOWN' });
+    expect(engine.getState().cursorPos).toBe(6); // empty line, clamped to col 0
+    engine.dispatch({ type: 'MOVE_CURSOR_DOWN' });
+    expect(engine.getState().cursorPos).toBe(7); // "w|orld", col 0
+  });
 });
 
 // ─── Engine: INSERT_IMAGE ───

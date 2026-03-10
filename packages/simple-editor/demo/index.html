@@ -11,119 +11,148 @@
       margin: 40px auto;
       padding: 20px;
     }
-    .container {
+    .editor-area {
       border: 1px solid #ccc;
       padding: 16px;
-      margin-bottom: 20px;
+      min-height: 200px;
       background-color: #f9f9f9;
+      cursor: text;
+      position: relative;
     }
-    button {
-      padding: 8px 16px;
-      margin-right: 8px;
-      cursor: pointer;
+    .editor-area:focus-within {
+      border-color: #4a90d9;
+      outline: none;
     }
-    input {
-      padding: 8px;
-      width: 300px;
-      margin-right: 8px;
+    .hidden-input {
+      position: absolute;
+      opacity: 0;
+      width: 0;
+      height: 0;
+      overflow: hidden;
+    }
+    .status-bar {
+      margin-top: 8px;
+      font-size: 12px;
+      color: #666;
+      font-family: monospace;
+    }
+    .hint {
+      margin-bottom: 12px;
+      font-size: 13px;
+      color: #888;
     }
   </style>
 </head>
 <body>
-  <div id="editor-container" class="container"></div>
+  <h2>SimpleEditor + Engine Demo</h2>
+  <p class="hint">Click the editor area and start typing. Markdown syntax renders as styled text.</p>
 
-  <div>
-    <input type="text" id="text-input" placeholder="Enter new text...">
-    <button id="update-btn">Update Text</button>
+  <div class="editor-area" id="editor-wrapper">
+    <textarea class="hidden-input" id="hidden-input"></textarea>
+    <div id="editor-container"></div>
   </div>
-
-  <div>
-    <label>Cursor Position: <input type="number" id="cursor-pos-input" min="0" value="0"></label>
-    <button id="cursor-prev">←</button>
-    <button id="cursor-next">→</button>
-    <button id="cursor-clear">Clear Cursor</button>
-  </div>
+  <div class="status-bar" id="status-bar"></div>
 
   <script type="module">
-    import { SimpleEditor } from '../dist/index.js';
+    import { SimpleEditor, Engine } from '../dist/index.js';
 
-    // Track state in local variables
-    let content = [
-      { type: 'text', value: 'Introduction to SimpleEditor', marks: ['bold'], size: '24px' },
-      { type: 'text', value: '\n\n', marks: [] },
-      { type: 'text', value: 'SimpleEditor is a lightweight text editor with support for rich text styling. It provides an example of how to build a custom editor with marks and size properties.\n\n', marks: [] },
-      { type: 'image', src: 'https://picsum.photos/800/400' },
-      { type: 'text', value: '\n', marks: [] },
-      { type: 'text', value: 'Key Features', marks: ['bold'], size: '18px' },
-      { type: 'text', value: '\n\n', marks: [] },
-      { type: 'text', value: 'Bold text support', marks: ['bold'] },
-      { type: 'text', value: ' - use the marks property\n', marks: [] },
-      { type: 'text', value: 'Italic text support', marks: ['italic'] },
-      { type: 'text', value: ' - combine with other marks\n', marks: [] },
-      { type: 'text', value: 'Custom font sizes', marks: [] },
-      { type: 'text', value: ' - set via the size property\n', marks: [] },
-      { type: 'text', value: 'Cursor positioning', marks: ['bold'] },
-      { type: 'text', value: ' - navigate through text\n\n', marks: [] },
-      { type: 'text', value: 'Getting Started', marks: ['bold'], size: '18px' },
-      { type: 'text', value: '\n\n', marks: [] },
-      { type: 'text', value: 'Edit the text above or use the controls below to update the editor content and cursor position.', marks: ['italic'] }
-    ];
-    let cursorPos = 0;
+    const INITIAL_TEXT = `# SimpleEditor Demo
 
-    const textInput = document.getElementById('text-input');
-    const updateBtn = document.getElementById('update-btn');
-    const cursorPosInput = document.getElementById('cursor-pos-input');
-    const cursorPrevBtn = document.getElementById('cursor-prev');
-    const cursorNextBtn = document.getElementById('cursor-next');
-    const cursorClearBtn = document.getElementById('cursor-clear');
+This editor is powered by the **Engine** class. Type *markdown* and see it styled in real time.
 
-    // Helper to clear container and recreate editor
-    function rerender() {
-      new SimpleEditor('editor-container', { content, cursorPos });
-    }
+## Features
+
+**Bold text** with double asterisks
+*Italic text* with single asterisks
+# Heading 1
+## Heading 2
+### Heading 3
+
+Start typing to try it out!`;
+
+    const editorWrapper = document.getElementById('editor-wrapper');
+    const hiddenInput = document.getElementById('hidden-input');
+    const statusBar = document.getElementById('status-bar');
+
+    const engine = new Engine({
+      text: INITIAL_TEXT,
+      cursorPos: INITIAL_TEXT.length,
+      onChange(state) {
+        new SimpleEditor('editor-container', {
+          content: state.content,
+          cursorPos: state.cursorPos,
+        });
+        statusBar.textContent = `cursor: ${state.cursorPos} | length: ${engine.getTextLength()}`;
+      },
+    });
 
     // Initial render
-    rerender();
+    const initialState = engine.getState();
+    new SimpleEditor('editor-container', {
+      content: initialState.content,
+      cursorPos: initialState.cursorPos,
+    });
+    statusBar.textContent = `cursor: ${initialState.cursorPos} | length: ${engine.getTextLength()}`;
 
-    // Update text
-    updateBtn.addEventListener('click', () => {
-      if (textInput.value) {
-        content = [{ type: 'text', value: textInput.value, marks: [] }];
-        // Clamp cursor to new text length
-        const totalLength = content.reduce((sum, n) => sum + (n.type === 'text' ? n.value.length : 0), 0);
-        cursorPos = Math.min(cursorPos, totalLength);
-        cursorPosInput.value = cursorPos;
-        textInput.value = '';
-        rerender();
+    // Focus the hidden input when clicking the editor area
+    editorWrapper.addEventListener('click', () => {
+      hiddenInput.focus();
+    });
+
+    // Keep hidden input focused
+    hiddenInput.addEventListener('blur', () => {
+      // Small delay so clicks on other elements still work
+      setTimeout(() => hiddenInput.focus(), 10);
+    });
+
+    // Auto-focus on load
+    hiddenInput.focus();
+
+    // Handle keyboard input
+    hiddenInput.addEventListener('keydown', (e) => {
+      switch (e.key) {
+        case 'Backspace':
+          e.preventDefault();
+          engine.dispatch({ type: 'DELETE_BACKWARD' });
+          break;
+        case 'ArrowLeft':
+          e.preventDefault();
+          engine.dispatch({ type: 'MOVE_CURSOR_LEFT' });
+          break;
+        case 'ArrowRight':
+          e.preventDefault();
+          engine.dispatch({ type: 'MOVE_CURSOR_RIGHT' });
+          break;
+        case 'ArrowUp':
+          e.preventDefault();
+          engine.dispatch({ type: 'MOVE_CURSOR_UP' });
+          break;
+        case 'ArrowDown':
+          e.preventDefault();
+          engine.dispatch({ type: 'MOVE_CURSOR_DOWN' });
+          break;
+        case 'Home':
+          e.preventDefault();
+          engine.dispatch({ type: 'MOVE_CURSOR_TO_START' });
+          break;
+        case 'End':
+          e.preventDefault();
+          engine.dispatch({ type: 'MOVE_CURSOR_TO_END' });
+          break;
+        case 'Enter':
+          e.preventDefault();
+          engine.dispatch({ type: 'INSERT_TEXT', text: '\n' });
+          break;
       }
     });
 
-    // Update cursor position
-    cursorPosInput.addEventListener('change', () => {
-      cursorPos = parseInt(cursorPosInput.value);
-      rerender();
-    });
-
-    // Move cursor left
-    cursorPrevBtn.addEventListener('click', () => {
-      cursorPos = Math.max(0, cursorPos - 1);
-      cursorPosInput.value = cursorPos;
-      rerender();
-    });
-
-    // Move cursor right
-    cursorNextBtn.addEventListener('click', () => {
-      const totalLength = content.reduce((sum, n) => sum + (n.type === 'text' ? n.value.length : 0), 0);
-      cursorPos = Math.min(totalLength, cursorPos + 1);
-      cursorPosInput.value = cursorPos;
-      rerender();
-    });
-
-    // Clear cursor
-    cursorClearBtn.addEventListener('click', () => {
-      cursorPos = -1;
-      cursorPosInput.value = '0';
-      rerender();
+    // Handle text input (captures typed characters and IME input)
+    hiddenInput.addEventListener('input', (e) => {
+      const text = hiddenInput.value;
+      if (text) {
+        engine.dispatch({ type: 'INSERT_TEXT', text });
+        hiddenInput.value = '';
+      }
     });
   </script>
 </body>

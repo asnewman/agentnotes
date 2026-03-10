@@ -11,6 +11,8 @@ export type Action =
   | { type: 'MOVE_CURSOR'; position: number }
   | { type: 'MOVE_CURSOR_LEFT' }
   | { type: 'MOVE_CURSOR_RIGHT' }
+  | { type: 'MOVE_CURSOR_UP' }
+  | { type: 'MOVE_CURSOR_DOWN' }
   | { type: 'MOVE_CURSOR_TO_START' }
   | { type: 'MOVE_CURSOR_TO_END' }
   | { type: 'INSERT_IMAGE'; src: string }
@@ -227,6 +229,28 @@ export function parseMarkdown(text: string): Node[] {
   return decorationsToNodes(text, decorations);
 }
 
+function getLineAndColumn(text: string, pos: number): { line: number; col: number } {
+  const lines = text.split('\n');
+  let offset = 0;
+  for (let i = 0; i < lines.length - 1; i++) {
+    const lineEnd = offset + lines[i].length;
+    if (pos <= lineEnd) {
+      return { line: i, col: pos - offset };
+    }
+    offset = lineEnd + 1; // +1 for the newline
+  }
+  return { line: lines.length - 1, col: pos - offset };
+}
+
+function getPositionFromLineAndColumn(text: string, line: number, col: number): number {
+  const lines = text.split('\n');
+  let offset = 0;
+  for (let i = 0; i < line; i++) {
+    offset += lines[i].length + 1;
+  }
+  return offset + Math.min(col, lines[line].length);
+}
+
 export class Engine {
   private text: string;
   private cursorPos: number;
@@ -277,6 +301,23 @@ export class Engine {
 
       case 'MOVE_CURSOR_RIGHT': {
         if (this.cursorPos < this.text.length) this.cursorPos++;
+        break;
+      }
+
+      case 'MOVE_CURSOR_UP': {
+        const { line, col } = getLineAndColumn(this.text, this.cursorPos);
+        if (line > 0) {
+          this.cursorPos = getPositionFromLineAndColumn(this.text, line - 1, col);
+        }
+        break;
+      }
+
+      case 'MOVE_CURSOR_DOWN': {
+        const { line, col } = getLineAndColumn(this.text, this.cursorPos);
+        const lineCount = this.text.split('\n').length;
+        if (line < lineCount - 1) {
+          this.cursorPos = getPositionFromLineAndColumn(this.text, line + 1, col);
+        }
         break;
       }
 
