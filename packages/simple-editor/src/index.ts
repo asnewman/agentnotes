@@ -110,6 +110,12 @@ export class SimpleEditor {
     cursor.className = 'simple-editor-cursor';
     cursor.textContent = character;
     this.applyTextNodeStyling(cursor, marks, size);
+    if (this.options.cursorColor) {
+      cursor.style.backgroundColor = this.options.cursorColor;
+    }
+    if (this.options.cursorTextColor) {
+      cursor.style.color = this.options.cursorTextColor;
+    }
     return cursor;
   }
 

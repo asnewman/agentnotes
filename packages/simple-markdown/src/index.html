@@ -1,0 +1,67 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta http-equiv="Content-Security-Policy"
+        content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline';">
+  <title>Simple Markdown</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body {
+      font-family: system-ui, -apple-system, sans-serif;
+      height: 100vh;
+      display: flex;
+      flex-direction: column;
+      background: #1e1e1e;
+      color: #d4d4d4;
+    }
+    .toolbar {
+      padding: 6px 16px;
+      background: #252526;
+      border-bottom: 1px solid #3c3c3c;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      font-size: 13px;
+      color: #999;
+      user-select: none;
+    }
+    .toolbar .filename {
+      flex: 1;
+    }
+    .toolbar .dirty-indicator {
+      color: #e06c75;
+      font-weight: bold;
+    }
+    .toolbar .dirty-indicator.hidden {
+      visibility: hidden;
+    }
+    .editor-area {
+      flex: 1;
+      padding: 16px 24px;
+      overflow-y: auto;
+      cursor: text;
+      position: relative;
+    }
+    .hidden-input {
+      position: absolute;
+      opacity: 0;
+      width: 0;
+      height: 0;
+      overflow: hidden;
+    }
+  </style>
+</head>
+<body>
+  <div class="toolbar">
+    <span class="filename" id="filename">Untitled</span>
+    <span class="dirty-indicator hidden" id="dirty-indicator">*</span>
+  </div>
+  <div class="editor-area" id="editor-wrapper">
+    <textarea class="hidden-input" id="hidden-input"></textarea>
+    <div id="editor-container"></div>
+  </div>
+  <script src="bundle.js"></script>
+</body>
+</html>

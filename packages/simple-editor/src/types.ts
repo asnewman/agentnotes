@@ -17,4 +17,6 @@ export type Node = TextNode | ImageNode;
 export interface SimpleEditorOptions {
   content: Node[];
   cursorPos?: number;
+  cursorColor?: string;
+  cursorTextColor?: string;
 }

@@ -466,3 +466,64 @@ describe('SimpleEditor - Image Rendering', () => {
     expect(cursorSpan?.style.fontSize).toBe('32px');
   });
 });
+
+describe('SimpleEditor - Cursor Color Options', () => {
+  let container: HTMLDivElement;
+
+  beforeEach(() => {
+    container = document.createElement('div');
+    container.id = 'test-container';
+    document.body.appendChild(container);
+  });
+
+  afterEach(() => {
+    document.body.removeChild(container);
+  });
+
+  it('should apply custom cursorColor as background-color', () => {
+    new SimpleEditor('test-container', {
+      content: [{ type: 'text', value: 'Hello' }],
+      cursorPos: 0,
+      cursorColor: 'red',
+    });
+
+    const cursorSpan = container.querySelector('.simple-editor-cursor') as HTMLElement;
+    expect(cursorSpan.style.backgroundColor).toBe('red');
+  });
+
+  it('should apply custom cursorTextColor as color', () => {
+    new SimpleEditor('test-container', {
+      content: [{ type: 'text', value: 'Hello' }],
+      cursorPos: 0,
+      cursorTextColor: 'white',
+    });
+
+    const cursorSpan = container.querySelector('.simple-editor-cursor') as HTMLElement;
+    expect(cursorSpan.style.color).toBe('white');
+  });
+
+  it('should apply both cursorColor and cursorTextColor together', () => {
+    new SimpleEditor('test-container', {
+      content: [{ type: 'text', value: 'Hello' }],
+      cursorPos: 0,
+      cursorColor: 'red',
+      cursorTextColor: 'white',
+    });
+
+    const cursorSpan = container.querySelector('.simple-editor-cursor') as HTMLElement;
+    expect(cursorSpan.style.backgroundColor).toBe('red');
+    expect(cursorSpan.style.color).toBe('white');
+  });
+
+  it('should use default cursor colors when options are not provided', () => {
+    new SimpleEditor('test-container', {
+      content: [{ type: 'text', value: 'Hello' }],
+      cursorPos: 0,
+    });
+
+    const cursorSpan = container.querySelector('.simple-editor-cursor') as HTMLElement;
+    // No inline overrides — colors come from the CSS class
+    expect(cursorSpan.style.backgroundColor).toBe('');
+    expect(cursorSpan.style.color).toBe('');
+  });
+});

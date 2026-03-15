@@ -1,0 +1,23 @@
+{
+  "name": "simple-markdown",
+  "version": "1.0.0",
+  "description": "Minimal markdown editor using simple-editor",
+  "main": "dist/main.js",
+  "scripts": {
+    "build": "npm run build:main && npm run build:renderer",
+    "build:main": "tsc -p tsconfig.main.json",
+    "build:renderer": "../../node_modules/.pnpm/esbuild@0.24.2/node_modules/esbuild/bin/esbuild src/renderer.ts --bundle --outfile=src/bundle.js --format=iife --platform=browser",
+    "typecheck": "tsc -p tsconfig.main.json --noEmit && tsc -p tsconfig.renderer.json",
+    "start": "npm run build && electron .",
+    "dev": "node scripts/dev-watch.mjs"
+  },
+  "dependencies": {
+    "@agentnotes/simple-editor": "workspace:*",
+    "electron": "^28.0.0"
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.2",
+    "esbuild": "^0.24.0",
+    "typescript": "^5.7.2"
+  }
+}
