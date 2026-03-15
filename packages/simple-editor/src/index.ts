@@ -12,10 +12,13 @@ const CURSOR_BLINK_STYLE = `
     font-family: monospace;
   }
   .simple-editor-cursor {
-    background-color: #000;
-    color: #fff;
     padding: 0;
     white-space: pre-wrap;
+    box-shadow: 2px 0 0 0 var(--cursor-color, #000);
+    animation: simple-editor-blink 1s step-end infinite;
+  }
+  @keyframes simple-editor-blink {
+    50% { box-shadow: 2px 0 0 0 transparent; }
   }
 `;
 
@@ -111,10 +114,7 @@ export class SimpleEditor {
     cursor.textContent = character;
     this.applyTextNodeStyling(cursor, marks, size);
     if (this.options.cursorColor) {
-      cursor.style.backgroundColor = this.options.cursorColor;
-    }
-    if (this.options.cursorTextColor) {
-      cursor.style.color = this.options.cursorTextColor;
+      cursor.style.setProperty('--cursor-color', this.options.cursorColor);
     }
     return cursor;
   }

@@ -480,50 +480,24 @@ describe('SimpleEditor - Cursor Color Options', () => {
     document.body.removeChild(container);
   });
 
-  it('should apply custom cursorColor as background-color', () => {
+  it('should set --cursor-color custom property when cursorColor is provided', () => {
     new SimpleEditor('test-container', {
       content: [{ type: 'text', value: 'Hello' }],
       cursorPos: 0,
-      cursorColor: 'red',
+      cursorColor: '#d4d4d4',
     });
 
     const cursorSpan = container.querySelector('.simple-editor-cursor') as HTMLElement;
-    expect(cursorSpan.style.backgroundColor).toBe('red');
+    expect(cursorSpan.style.getPropertyValue('--cursor-color')).toBe('#d4d4d4');
   });
 
-  it('should apply custom cursorTextColor as color', () => {
-    new SimpleEditor('test-container', {
-      content: [{ type: 'text', value: 'Hello' }],
-      cursorPos: 0,
-      cursorTextColor: 'white',
-    });
-
-    const cursorSpan = container.querySelector('.simple-editor-cursor') as HTMLElement;
-    expect(cursorSpan.style.color).toBe('white');
-  });
-
-  it('should apply both cursorColor and cursorTextColor together', () => {
-    new SimpleEditor('test-container', {
-      content: [{ type: 'text', value: 'Hello' }],
-      cursorPos: 0,
-      cursorColor: 'red',
-      cursorTextColor: 'white',
-    });
-
-    const cursorSpan = container.querySelector('.simple-editor-cursor') as HTMLElement;
-    expect(cursorSpan.style.backgroundColor).toBe('red');
-    expect(cursorSpan.style.color).toBe('white');
-  });
-
-  it('should use default cursor colors when options are not provided', () => {
+  it('should not set --cursor-color when cursorColor is not provided', () => {
     new SimpleEditor('test-container', {
       content: [{ type: 'text', value: 'Hello' }],
       cursorPos: 0,
     });
 
     const cursorSpan = container.querySelector('.simple-editor-cursor') as HTMLElement;
-    // No inline overrides — colors come from the CSS class
-    expect(cursorSpan.style.backgroundColor).toBe('');
-    expect(cursorSpan.style.color).toBe('');
+    expect(cursorSpan.style.getPropertyValue('--cursor-color')).toBe('');
   });
 });

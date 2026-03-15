@@ -34,7 +34,6 @@ const engine = new Engine({
       content: state.content,
       cursorPos: state.cursorPos,
       cursorColor: '#d4d4d4',
-      cursorTextColor: '#1e1e1e',
     });
   },
   onSave() {

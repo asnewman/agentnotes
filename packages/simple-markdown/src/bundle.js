@@ -285,10 +285,13 @@
     font-family: monospace;
   }
   .simple-editor-cursor {
-    background-color: #000;
-    color: #fff;
     padding: 0;
     white-space: pre-wrap;
+    box-shadow: 2px 0 0 0 var(--cursor-color, #000);
+    animation: simple-editor-blink 1s step-end infinite;
+  }
+  @keyframes simple-editor-blink {
+    50% { box-shadow: 2px 0 0 0 transparent; }
   }
 `;
   var SimpleEditor = class {
@@ -378,10 +381,7 @@
       cursor.textContent = character;
       this.applyTextNodeStyling(cursor, marks, size);
       if (this.options.cursorColor) {
-        cursor.style.backgroundColor = this.options.cursorColor;
-      }
-      if (this.options.cursorTextColor) {
-        cursor.style.color = this.options.cursorTextColor;
+        cursor.style.setProperty("--cursor-color", this.options.cursorColor);
       }
       return cursor;
     }
@@ -464,8 +464,7 @@
       new SimpleEditor("editor-container", {
         content: state.content,
         cursorPos: state.cursorPos,
-        cursorColor: "#d4d4d4",
-        cursorTextColor: "#1e1e1e"
+        cursorColor: "#d4d4d4"
       });
     },
     onSave() {
